@@ -1,0 +1,244 @@
+// Complete Multi-Tenant Billing & RBAC Schema for MySQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String            @id @default(uuid())
+  name             String            @db.VarChar(100)
+  email            String            @unique @db.VarChar(255)
+  avatarUrl        String?           @db.Text
+  ownedWorkspaces  Workspace[]       @relation("WorkspaceOwner")
+  memberships      WorkspaceMember[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@map("users")
+}
+
+model Role {
+  id              String            @id @default(uuid())
+  name            String            @unique @db.VarChar(50) // owner | admin | member | viewer
+  description     String?           @db.Text
+  isSystem        Boolean           @default(true)
+  permissions     RolePermission[]
+  members         WorkspaceMember[]
+  invitations     WorkspaceInvitation[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  name        String           @unique @db.VarChar(100) // e.g. invoice:create, invoice:read
+  module      String           @db.VarChar(50) // invoice, customer, workspace, product
+  description String?          @db.Text
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Workspace {
+  id             String                @id @default(uuid())
+  type           String                @default("personal") @db.VarChar(20) // personal | company
+  name           String                @db.VarChar(150)
+  slug           String                @unique @db.VarChar(150)
+  ownerId        String
+  owner          User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members        WorkspaceMember[]
+  invitations    WorkspaceInvitation[]
+  customers      Customer[]
+  products       Product[]
+  invoices       Invoice[]
+  paymentMethods PaymentMethod[]
+  templates      InvoiceTemplate[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId      String
+  role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model WorkspaceInvitation {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email       String    @db.VarChar(255)
+  roleId      String
+  role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  token       String    @unique @db.VarChar(255)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("workspace_invitations")
+}
+
+model Customer {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String    @db.VarChar(150)
+  email       String?   @db.VarChar(255)
+  phone       String?   @db.VarChar(50)
+  address     String?   @db.Text
+  taxNumber   String?   @db.VarChar(100)
+  invoices    Invoice[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("customers")
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String        @db.VarChar(150)
+  description String?       @db.Text
+  price       Decimal       @default(0.00) @db.Decimal(15, 2)
+  unit        String?       @db.VarChar(50)
+  taxRate     Decimal       @default(0.00) @db.Decimal(5, 2)
+  items       InvoiceItem[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("products")
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  workspaceId   String
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  invoiceNumber String        @db.VarChar(100)
+  issueDate     DateTime      @default(now())
+  dueDate       DateTime?
+  status        String        @default("unpaid") @db.VarChar(30) // draft | sent | unpaid | partially_paid | paid | overdue | cancelled
+
+  subtotal      Decimal       @default(0.00) @db.Decimal(15, 2)
+  discount      Decimal       @default(0.00) @db.Decimal(15, 2)
+  tax           Decimal       @default(0.00) @db.Decimal(15, 2)
+  total         Decimal       @default(0.00) @db.Decimal(15, 2)
+
+  notes         String?       @db.Text
+  terms         String?       @db.Text
+
+  items         InvoiceItem[]
+  payments      Payment[]
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([workspaceId, invoiceNumber])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  description String   @db.Text
+  quantity    Decimal  @default(1.000) @db.Decimal(15, 3)
+  unit        String?  @db.VarChar(50)
+  unitPrice   Decimal  @default(0.00) @db.Decimal(15, 2)
+
+  discount    Decimal  @default(0.00) @db.Decimal(15, 2)
+  taxRate     Decimal  @default(0.00) @db.Decimal(5, 2)
+
+  subtotal    Decimal  @default(0.00) @db.Decimal(15, 2)
+  total       Decimal  @default(0.00) @db.Decimal(15, 2)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("invoice_items")
+}
+
+model Payment {
+  id              String   @id @default(uuid())
+  invoiceId       String
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  amount          Decimal  @db.Decimal(15, 2)
+  paymentDate     DateTime @default(now())
+  method          String   @db.VarChar(50)
+  referenceNumber String?  @db.VarChar(100)
+  notes           String?  @db.Text
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("payments")
+}
+
+model PaymentMethod {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name          String    @db.VarChar(100)
+  bankName      String?   @db.VarChar(100)
+  accountName   String?   @db.VarChar(150)
+  accountNumber String?   @db.VarChar(100)
+
+  isActive      Boolean   @default(true)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("payment_methods")
+}
+
+model InvoiceTemplate {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name         String    @db.VarChar(100)
+  templateType String    @db.VarChar(50)
+  settings     Json?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("invoice_templates")
+}
