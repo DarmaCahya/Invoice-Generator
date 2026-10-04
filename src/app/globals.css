@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,27 +7,68 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 font-sans antialiased min-h-screen selection:bg-brand-500 selection:text-white;
+    background-color: #FAFAFA;
+    color: #0A0A0A;
+    font-family: 'DM Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: 'General Sans', 'DM Sans', sans-serif;
+    letter-spacing: -0.035em;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
   }
 }
 
-/* Glassmorphism Cards */
-.glass-panel {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+/* Genesis Gallery Cards & Hover Lift */
+.genesis-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E8E8EC;
+  border-radius: 12px;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 
-.glass-panel-hover {
-  transition: all 0.25s ease-in-out;
-}
-.glass-panel-hover:hover {
-  background: rgba(30, 41, 59, 0.85);
-  border-color: rgba(56, 189, 248, 0.3);
-  box-shadow: 0 12px 40px -10px rgba(12, 141, 233, 0.25);
+.genesis-card:hover {
   transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+/* Button & Input Standards */
+.genesis-input {
+  background-color: #FFFFFF;
+  border: 1px solid #E8E8EC;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #0A0A0A;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.genesis-input::placeholder {
+  color: #9C9C9C;
+}
+
+.genesis-input:focus {
+  border-color: #6366F1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.genesis-button-primary {
+  background-color: #6366F1;
+  color: #FFFFFF;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.genesis-button-primary:hover {
+  background-color: #4F46E5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
 }
 
 /* Custom Scrollbar */
@@ -36,16 +78,16 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #020617;
+  background: #FAFAFA;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #E8E8EC;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #9C9C9C;
 }
 
 @media print {
@@ -55,8 +97,5 @@
   }
   .no-print {
     display: none !important;
-  }
-  .print-only {
-    display: block !important;
   }
 }

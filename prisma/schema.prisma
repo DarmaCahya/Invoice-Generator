@@ -10,14 +10,18 @@ datasource db {
 }
 
 model User {
-  id               String            @id @default(uuid())
-  name             String            @db.VarChar(100)
-  email            String            @unique @db.VarChar(255)
-  avatarUrl        String?           @db.Text
-  ownedWorkspaces  Workspace[]       @relation("WorkspaceOwner")
-  memberships      WorkspaceMember[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id                String            @id @default(uuid())
+  name              String            @db.VarChar(100)
+  email             String            @unique @db.VarChar(255)
+  passwordHash      String?           @db.VarChar(255)
+  avatarUrl         String?           @db.Text
+  isActive          Boolean           @default(false)
+  activationToken   String?           @unique @db.VarChar(255)
+  activationExpires DateTime?
+  ownedWorkspaces   Workspace[]       @relation("WorkspaceOwner")
+  memberships       WorkspaceMember[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   @@map("users")
 }
@@ -109,8 +113,8 @@ model WorkspaceInvitation {
 
 model Customer {
   id          String    @id @default(uuid())
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String    @db.VarChar(150)
   email       String?   @db.VarChar(255)
   phone       String?   @db.VarChar(50)
@@ -141,8 +145,8 @@ model Product {
 
 model Invoice {
   id            String        @id @default(uuid())
-  workspaceId   String
-  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId   String?
+  workspace     Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   customerId    String
   customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
 

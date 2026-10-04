@@ -63,12 +63,19 @@ export class InvoiceService {
         status: input.status || 'PENDING',
         issueDate: input.issueDate ? new Date(input.issueDate) : new Date(),
         dueDate: new Date(input.dueDate),
-        taxRate,
+        subtotal,
+        tax: taxAmount,
         discount,
-        totalAmount,
+        total: totalAmount,
         notes: input.notes,
         items: {
-          create: processedItems,
+          create: processedItems.map(it => ({
+            description: it.description,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            subtotal: it.amount,
+            total: it.amount,
+          })),
         },
       },
       include: {

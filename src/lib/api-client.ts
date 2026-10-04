@@ -29,7 +29,7 @@ export interface InvoiceDTO {
   id?: string;
   invoiceNumber: string;
   status: 'DRAFT' | 'PENDING' | 'PAID' | 'OVERDUE';
-  issueDate: string;
+  issueDate?: string;
   dueDate: string;
   taxRate: number;
   discount: number;
