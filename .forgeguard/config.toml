@@ -1,0 +1,58 @@
+version = 2
+mode = "default"
+
+[project]
+name = "invoice generator"
+
+[scan]
+enabled = true
+max_file_bytes = 1000000
+include_tests = false
+extra_excludes = []
+duplicate_block_lines = 6
+taint_sources = []
+trusted_sanitizers = []
+
+[[commands]]
+name = "build"
+command = "npm run build"
+required = true
+enabled = true
+timeout_seconds = 600
+
+[[commands]]
+name = "dependency-audit"
+command = "npm audit"
+required = true
+enabled = false
+timeout_seconds = 600
+
+[[commands]]
+name = "lint"
+command = "npm run lint"
+required = true
+enabled = true
+timeout_seconds = 600
+
+[[commands]]
+name = "sbom"
+command = "npm sbom --sbom-format cyclonedx"
+required = true
+enabled = false
+timeout_seconds = 600
+
+[focus]
+enabled = true
+max_retries = 3
+no_progress_limit = 2
+auto_poke = true
+max_auto_pokes = 3
+min_confidence = 80
+min_hill_climbability = 80
+
+[policies]
+
+[rules]
+
+[update]
+policy = "auto"

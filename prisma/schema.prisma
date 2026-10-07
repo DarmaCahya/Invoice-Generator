@@ -1,41 +1,45 @@
-// Complete Multi-Tenant Billing & RBAC Schema for MySQL
+// Complete Multi-Tenant Billing & RBAC Schema for PostgreSQL
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+// ==========================================
+// AUTHENTICATION & USERS
+// ==========================================
+
 model User {
   id                String            @id @default(uuid())
-  name              String            @db.VarChar(100)
+  name              String            @default("") @db.VarChar(150)
   email             String            @unique @db.VarChar(255)
-  passwordHash      String?           @db.VarChar(255)
-  avatarUrl         String?           @db.Text
-  isActive          Boolean           @default(false)
-  activationToken   String?           @unique @db.VarChar(255)
-  activationExpires DateTime?
+  passwordHash      String?           @map("password_hash") @db.VarChar(255)
+  avatarUrl         String?           @map("avatar_url") @db.Text
+  isActive          Boolean           @default(true) @map("is_active")
+  activationToken   String?           @unique @map("activation_token") @db.VarChar(255)
+  activationExpires DateTime?         @map("activation_expires")
   ownedWorkspaces   Workspace[]       @relation("WorkspaceOwner")
   memberships       WorkspaceMember[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at")
 
   @@map("users")
 }
 
 model Role {
-  id              String            @id @default(uuid())
-  name            String            @unique @db.VarChar(50) // owner | admin | member | viewer
-  description     String?           @db.Text
-  isSystem        Boolean           @default(true)
-  permissions     RolePermission[]
-  members         WorkspaceMember[]
-  invitations     WorkspaceInvitation[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id          String                @id @default(uuid())
+  name        String                @unique @db.VarChar(50) // owner | admin | member | viewer
+  description String?               @db.Text
+  isSystem    Boolean               @default(false) @map("is_system")
+  permissions RolePermission[]
+  members     WorkspaceMember[]
+  invitations WorkspaceInvitation[]
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @default(now()) @updatedAt @map("updated_at")
 
   @@map("roles")
 }
@@ -43,31 +47,36 @@ model Role {
 model Permission {
   id          String           @id @default(uuid())
   name        String           @unique @db.VarChar(100) // e.g. invoice:create, invoice:read
-  module      String           @db.VarChar(50) // invoice, customer, workspace, product
+  module      String           @db.VarChar(50) // invoice, customer, product, workspace, etc
   description String?          @db.Text
   roles       RolePermission[]
-  createdAt   DateTime         @default(now())
+  createdAt   DateTime         @default(now()) @map("created_at")
 
   @@map("permissions")
 }
 
 model RolePermission {
-  roleId       String
+  roleId       String     @map("role_id")
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permissionId String
+  permissionId String     @map("permission_id")
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
   @@map("role_permissions")
 }
 
+// ==========================================
+// WORKSPACE / MULTI COMPANY
+// ==========================================
+
 model Workspace {
   id             String                @id @default(uuid())
   type           String                @default("personal") @db.VarChar(20) // personal | company
   name           String                @db.VarChar(150)
   slug           String                @unique @db.VarChar(150)
-  ownerId        String
+  ownerId        String                @map("owner_id")
   owner          User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  companyProfile CompanyProfile?
   members        WorkspaceMember[]
   invitations    WorkspaceInvitation[]
   customers      Customer[]
@@ -75,22 +84,46 @@ model Workspace {
   invoices       Invoice[]
   paymentMethods PaymentMethod[]
   templates      InvoiceTemplate[]
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @default(now()) @updatedAt @map("updated_at")
 
   @@map("workspaces")
 }
 
+model CompanyProfile {
+  id          String    @id @default(uuid())
+  workspaceId String    @unique @map("workspace_id")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  legalName   String    @map("legal_name") @db.VarChar(255)
+  displayName String?   @map("display_name") @db.VarChar(255)
+  email       String?   @db.VarChar(255)
+  phone       String?   @db.VarChar(50)
+  address     String?   @db.Text
+  taxNumber   String?   @map("tax_number") @db.VarChar(100)
+
+  logoUrl     String?   @map("logo_url") @db.Text
+  website     String?   @db.VarChar(255)
+
+  currency    String    @default("IDR") @db.VarChar(10)
+  timezone    String    @default("Asia/Jakarta") @db.VarChar(50)
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("company_profiles")
+}
+
 model WorkspaceMember {
   id          String    @id @default(uuid())
-  workspaceId String
+  workspaceId String    @map("workspace_id")
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  userId      String
+  userId      String    @map("user_id")
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  roleId      String
+  roleId      String    @map("role_id")
   role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@unique([workspaceId, userId])
   @@map("workspace_members")
@@ -98,151 +131,189 @@ model WorkspaceMember {
 
 model WorkspaceInvitation {
   id          String    @id @default(uuid())
-  workspaceId String
+  workspaceId String    @map("workspace_id")
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   email       String    @db.VarChar(255)
-  roleId      String
+  roleId      String    @map("role_id")
   role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
   token       String    @unique @db.VarChar(255)
-  expiresAt   DateTime
-  acceptedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  expiresAt   DateTime  @map("expires_at")
+  acceptedAt  DateTime? @map("accepted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   @@map("workspace_invitations")
 }
 
+// ==========================================
+// MASTER DATA
+// ==========================================
+
 model Customer {
   id          String    @id @default(uuid())
-  workspaceId String?
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  name        String    @db.VarChar(150)
+  workspaceId String    @map("workspace_id")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String    @db.VarChar(255)
   email       String?   @db.VarChar(255)
   phone       String?   @db.VarChar(50)
   address     String?   @db.Text
-  taxNumber   String?   @db.VarChar(100)
+  taxNumber   String?   @map("tax_number") @db.VarChar(100)
   invoices    Invoice[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
+  @@index([workspaceId, email])
   @@map("customers")
 }
 
 model Product {
   id          String        @id @default(uuid())
-  workspaceId String
+  workspaceId String        @map("workspace_id")
   workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  name        String        @db.VarChar(150)
+  name        String        @db.VarChar(255)
   description String?       @db.Text
   price       Decimal       @default(0.00) @db.Decimal(15, 2)
-  unit        String?       @db.VarChar(50)
-  taxRate     Decimal       @default(0.00) @db.Decimal(5, 2)
+  unit        String        @default("pcs") @db.VarChar(50)
+  taxRate     Decimal       @default(0.00) @map("tax_rate") @db.Decimal(5, 2)
+  isActive    Boolean       @default(true) @map("is_active")
   items       InvoiceItem[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("products")
-}
-
-model Invoice {
-  id            String        @id @default(uuid())
-  workspaceId   String?
-  workspace     Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  customerId    String
-  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  invoiceNumber String        @db.VarChar(100)
-  issueDate     DateTime      @default(now())
-  dueDate       DateTime?
-  status        String        @default("unpaid") @db.VarChar(30) // draft | sent | unpaid | partially_paid | paid | overdue | cancelled
-
-  subtotal      Decimal       @default(0.00) @db.Decimal(15, 2)
-  discount      Decimal       @default(0.00) @db.Decimal(15, 2)
-  tax           Decimal       @default(0.00) @db.Decimal(15, 2)
-  total         Decimal       @default(0.00) @db.Decimal(15, 2)
-
-  notes         String?       @db.Text
-  terms         String?       @db.Text
-
-  items         InvoiceItem[]
-  payments      Payment[]
-
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  @@unique([workspaceId, invoiceNumber])
-  @@map("invoices")
-}
-
-model InvoiceItem {
-  id          String   @id @default(uuid())
-  invoiceId   String
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  productId   String?
-  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-
-  description String   @db.Text
-  quantity    Decimal  @default(1.000) @db.Decimal(15, 3)
-  unit        String?  @db.VarChar(50)
-  unitPrice   Decimal  @default(0.00) @db.Decimal(15, 2)
-
-  discount    Decimal  @default(0.00) @db.Decimal(15, 2)
-  taxRate     Decimal  @default(0.00) @db.Decimal(5, 2)
-
-  subtotal    Decimal  @default(0.00) @db.Decimal(15, 2)
-  total       Decimal  @default(0.00) @db.Decimal(15, 2)
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("invoice_items")
-}
-
-model Payment {
-  id              String   @id @default(uuid())
-  invoiceId       String
-  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-
-  amount          Decimal  @db.Decimal(15, 2)
-  paymentDate     DateTime @default(now())
-  method          String   @db.VarChar(50)
-  referenceNumber String?  @db.VarChar(100)
-  notes           String?  @db.Text
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@map("payments")
 }
 
 model PaymentMethod {
   id            String    @id @default(uuid())
-  workspaceId   String
+  workspaceId   String    @map("workspace_id")
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   name          String    @db.VarChar(100)
-  bankName      String?   @db.VarChar(100)
-  accountName   String?   @db.VarChar(150)
-  accountNumber String?   @db.VarChar(100)
+  type          String    @default("bank_transfer") @db.VarChar(50) // bank_transfer, cash, qris, card, other
 
-  isActive      Boolean   @default(true)
+  bankName      String?   @map("bank_name") @db.VarChar(100)
+  accountName   String?   @map("account_name") @db.VarChar(150)
+  accountNumber String?   @map("account_number") @db.VarChar(100)
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  isActive      Boolean   @default(true) @map("is_active")
+  payments      Payment[]
 
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
   @@map("payment_methods")
 }
 
 model InvoiceTemplate {
   id           String    @id @default(uuid())
-  workspaceId  String
+  workspaceId  String    @map("workspace_id")
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   name         String    @db.VarChar(100)
-  templateType String    @db.VarChar(50)
+  templateType String    @map("template_type") @db.VarChar(50)
   settings     Json?
+  isDefault    Boolean   @default(false) @map("is_default")
+  invoices     Invoice[]
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
 
+  @@index([workspaceId])
   @@map("invoice_templates")
+}
+
+// ==========================================
+// INVOICES & PAYMENTS
+// ==========================================
+
+model Invoice {
+  id            String           @id @default(uuid())
+  workspaceId   String           @map("workspace_id")
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  customerId    String           @map("customer_id")
+  customer      Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  templateId    String?          @map("template_id")
+  template      InvoiceTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  invoiceNumber String           @map("invoice_number") @db.VarChar(100)
+  issueDate     DateTime         @default(now()) @map("issue_date")
+  dueDate       DateTime?        @map("due_date")
+  status        String           @default("unpaid") @db.VarChar(30) // draft | sent | unpaid | partially_paid | paid | overdue | cancelled
+
+  subtotal      Decimal          @default(0.00) @db.Decimal(15, 2)
+  discount      Decimal          @default(0.00) @db.Decimal(15, 2)
+  tax           Decimal          @default(0.00) @db.Decimal(15, 2)
+  total         Decimal          @default(0.00) @db.Decimal(15, 2)
+
+  amountPaid    Decimal          @default(0.00) @map("amount_paid") @db.Decimal(15, 2)
+  amountDue     Decimal          @default(0.00) @map("amount_due") @db.Decimal(15, 2)
+
+  currency      String           @default("IDR") @db.VarChar(10)
+
+  notes         String?          @db.Text
+  terms         String?          @db.Text
+
+  items         InvoiceItem[]
+  payments      Payment[]
+
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([workspaceId, invoiceNumber])
+  @@index([workspaceId])
+  @@index([customerId])
+  @@index([workspaceId, status])
+  @@index([workspaceId, issueDate])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  invoiceId   String   @map("invoice_id")
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId   String?  @map("product_id")
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  description String   @db.Text
+  quantity    Decimal  @default(1.0000) @db.Decimal(15, 4)
+  unit        String   @default("pcs") @db.VarChar(50)
+  unitPrice   Decimal  @default(0.00) @map("unit_price") @db.Decimal(15, 2)
+
+  discount    Decimal  @default(0.00) @db.Decimal(15, 2)
+  taxRate     Decimal  @default(0.00) @map("tax_rate") @db.Decimal(5, 2)
+
+  subtotal    Decimal  @default(0.00) @db.Decimal(15, 2)
+  tax         Decimal  @default(0.00) @db.Decimal(15, 2)
+  total       Decimal  @default(0.00) @db.Decimal(15, 2)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([invoiceId])
+  @@index([productId])
+  @@map("invoice_items")
+}
+
+model Payment {
+  id              String         @id @default(uuid())
+  invoiceId       String         @map("invoice_id")
+  invoice         Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  paymentMethodId String?        @map("payment_method_id")
+  paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+
+  amount          Decimal        @db.Decimal(15, 2)
+  paymentDate     DateTime       @default(now()) @map("payment_date")
+  referenceNumber String?        @map("reference_number") @db.VarChar(150)
+  status          String         @default("completed") @db.VarChar(30) // pending | completed | failed | refunded
+  notes           String?        @db.Text
+
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @default(now()) @updatedAt @map("updated_at")
+
+  @@index([invoiceId])
+  @@index([paymentMethodId])
+  @@index([invoiceId, paymentDate])
+  @@map("payments")
 }

@@ -36,12 +36,13 @@ func initSeedData() {
 	}
 	store.customers[c1.ID] = c1
 
+	dueDate := time.Now().AddDate(0, 0, 14)
 	inv1 := models.Invoice{
 		ID:            "inv-go-1001",
 		InvoiceNumber: "INV-GO-2026-001",
 		Status:        "PAID",
 		IssueDate:     time.Now(),
-		DueDate:       time.Now().AddDate(0, 0, 14),
+		DueDate:       &dueDate,
 		TaxRate:       11.0,
 		Discount:      50.0,
 		TotalAmount:   1160.0,

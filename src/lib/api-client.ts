@@ -28,7 +28,7 @@ export interface InvoiceItemDTO {
 export interface InvoiceDTO {
   id?: string;
   invoiceNumber: string;
-  status: 'DRAFT' | 'PENDING' | 'PAID' | 'OVERDUE';
+  status: string;
   issueDate?: string;
   dueDate: string;
   taxRate: number;
@@ -38,6 +38,34 @@ export interface InvoiceDTO {
   customerId: string;
   customer?: CustomerDTO;
   items: InvoiceItemDTO[];
+}
+
+export interface CompanyProfileDTO {
+  id?: string;
+  workspaceId?: string;
+  legalName: string;
+  displayName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  taxNumber?: string;
+  logoUrl?: string;
+  website?: string;
+  currency?: string;
+  timezone?: string;
+}
+
+export interface WorkspaceDTO {
+  id: string;
+  name: string;
+  slug?: string;
+  type?: string;
+  companyProfile?: CompanyProfileDTO;
+  _count?: {
+    invoices?: number;
+    customers?: number;
+    members?: number;
+  };
 }
 
 class ApiClient {
@@ -66,6 +94,25 @@ class ApiClient {
     }
 
     return response.json() as Promise<T>;
+  }
+
+  // Workspaces / Multi-Company API
+  async getWorkspaces(): Promise<WorkspaceDTO[]> {
+    return this.fetcher('/workspaces');
+  }
+
+  async createWorkspace(workspace: { name: string; type?: string }): Promise<WorkspaceDTO> {
+    return this.fetcher('/workspaces', {
+      method: 'POST',
+      body: JSON.stringify(workspace),
+    });
+  }
+
+  async inviteWorkspaceMember(workspaceId: string, email: string): Promise<{ invitation: any; activationUrl: string }> {
+    return this.fetcher(`/workspaces/${workspaceId}/invitations`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
   }
 
   // Health check endpoint
@@ -111,7 +158,7 @@ class ApiClient {
   async deleteInvoice(id: string): Promise<{ success: boolean }> {
     return this.fetcher(`/invoices/${id}`, {
       method: 'DELETE',
-    });
+      });
   }
 }
 
