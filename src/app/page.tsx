@@ -34,6 +34,7 @@ import {
   Copy,
   FileText,
   CheckCircle,
+  ChevronDown,
 } from 'lucide-react';
 import { apiClient, InvoiceDTO, CustomerDTO, WorkspaceDTO, ProjectDTO } from '@/lib/api-client';
 import Sidebar, { NavigationTab } from '@/components/layout/Sidebar';
@@ -70,6 +71,17 @@ export default function Dashboard() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDTO | null>(null);
   const [selectedProject, setSelectedProject] = useState<ProjectDTO | null>(null);
 
+  // No customer warning modal
+  const [noCustomerWarningOpen, setNoCustomerWarningOpen] = useState(false);
+
+  const handleOpenInvoiceModal = () => {
+    if (customers.length === 0) {
+      setNoCustomerWarningOpen(true);
+    } else {
+      setIsInvoiceModalOpen(true);
+    }
+  };
+
   // Projects State
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
 
@@ -79,12 +91,11 @@ export default function Dashboard() {
     customerId: '',
     description: '',
     billingType: 'milestone' as 'milestone' | 'fixed' | 'hourly' | 'retainer',
-    totalBudget: 15000000,
-    hourlyRate: 150000,
+    totalBudget: 0,
+    hourlyRate: 0,
     milestones: [
-      { title: 'DP 50% Inisiasi & Desain UI/UX', amount: 7500000, percentage: 50 },
-      { title: 'Termin 2 - Implementation & API', amount: 4500000, percentage: 30 },
-      { title: 'Pelunasan 20% - Deployment & Handover', amount: 3000000, percentage: 20 },
+      { title: 'DP 50% Inisiasi & UI/UX', amount: 0, percentage: 50 },
+      { title: 'Pelunasan 50% Handover', amount: 0, percentage: 50 },
     ],
   });
 
@@ -107,7 +118,7 @@ export default function Dashboard() {
     discount: 0,
     notes: 'Terima kasih atas kerja sama Anda.',
     items: [
-      { description: 'Layanan Pengembangan Software & API Integration', quantity: 1, unitPrice: 3500000 },
+      { description: '', quantity: 1, unitPrice: 0 },
     ],
   });
 
@@ -120,29 +131,32 @@ export default function Dashboard() {
     address: '',
   });
 
-  // Fetch initial data
-  const fetchData = async () => {
+  // Fetch workspace-scoped data
+  const fetchData = async (wsId?: string) => {
     setLoading(true);
     try {
-      const [workspacesRes, invoicesRes, customersRes, projectsRes] = await Promise.all([
-        apiClient.getWorkspaces().catch(() => [
-          { id: 'ws-1', name: 'Cendana Tech Solution', type: 'company', slug: 'cendana-tech' },
-          { id: 'ws-2', name: 'PT Digital Asia Utama', type: 'company', slug: 'digital-asia' },
-          { id: 'ws-3', name: 'Studio Creative Indonesia', type: 'personal', slug: 'studio-creative' },
-        ]),
-        apiClient.getInvoices().catch(() => []),
-        apiClient.getCustomers().catch(() => []),
-        apiClient.getProjects().catch(() => []),
+      let currentWsId = wsId !== undefined ? wsId : activeWorkspaceId;
+
+      let currentWorkspaces = workspaces;
+      if (currentWorkspaces.length === 0) {
+        currentWorkspaces = await apiClient.getWorkspaces().catch(() => []);
+        setWorkspaces(currentWorkspaces);
+      }
+
+      if (!currentWsId && currentWorkspaces.length > 0) {
+        currentWsId = currentWorkspaces[0].id;
+        setActiveWorkspaceId(currentWsId);
+      }
+
+      const [invoicesRes, customersRes, projectsRes] = await Promise.all([
+        apiClient.getInvoices(currentWsId || undefined).catch(() => []),
+        apiClient.getCustomers(currentWsId || undefined).catch(() => []),
+        apiClient.getProjects(currentWsId || undefined).catch(() => []),
       ]);
 
-      setWorkspaces(workspacesRes);
       setInvoices(invoicesRes);
       setCustomers(customersRes);
       setProjects(projectsRes);
-
-      if (workspacesRes.length > 0) {
-        setActiveWorkspaceId((prev) => prev || workspacesRes[0].id);
-      }
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
@@ -151,8 +165,8 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(activeWorkspaceId || undefined);
+  }, [activeWorkspaceId]);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0];
 
@@ -299,7 +313,7 @@ export default function Dashboard() {
         taxRate: 11,
         discount: 0,
         notes: 'Terima kasih atas kerja sama Anda.',
-        items: [{ description: 'Layanan Desain & Implementasi', quantity: 1, unitPrice: 2500000 }],
+        items: [{ description: '', quantity: 1, unitPrice: 0 }],
       });
       fetchData();
     } catch (err: any) {
@@ -433,8 +447,13 @@ export default function Dashboard() {
       const res = await apiClient.createWorkspace(newWorkspace);
       setIsWorkspaceModalOpen(false);
       setNewWorkspace({ name: '', type: 'company' });
-      await fetchData();
-      if (res && res.id) setActiveWorkspaceId(res.id);
+      const updatedWorkspaces = await apiClient.getWorkspaces().catch(() => []);
+      setWorkspaces(updatedWorkspaces);
+      if (res && res.id) {
+        setActiveWorkspaceId(res.id);
+      } else {
+        await fetchData();
+      }
     } catch (err: any) {
       alert(err.message || 'Gagal membuat workspace.');
     }
@@ -561,7 +580,7 @@ export default function Dashboard() {
                   <span>Tambah Pelanggan</span>
                 </button>
                 <button
-                  onClick={() => setIsInvoiceModalOpen(true)}
+                  onClick={handleOpenInvoiceModal}
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-red-500/20 active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
@@ -575,10 +594,10 @@ export default function Dashboard() {
               {statsCards.map((st) => (
                 <div
                   key={st.label}
-                  className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between min-h-[145px]"
+                  className="bg-white border border-slate-200/90 rounded-2xl p-5 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between min-h-[155px]"
                 >
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider line-clamp-2 leading-snug break-words min-h-[2rem]">
                       {st.label}
                     </span>
                     <div
@@ -647,7 +666,7 @@ export default function Dashboard() {
                           Belum ada invoice yang terbit.
                         </p>
                         <button
-                          onClick={() => setIsInvoiceModalOpen(true)}
+                          onClick={handleOpenInvoiceModal}
                           className="inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:underline"
                         >
                           <Plus className="w-3.5 h-3.5" /> Buat invoice pertama
@@ -855,7 +874,7 @@ export default function Dashboard() {
                       Tidak ditemukan invoice yang sesuai dengan pencarian / filter.
                     </p>
                     <button
-                      onClick={() => setIsInvoiceModalOpen(true)}
+                      onClick={handleOpenInvoiceModal}
                       className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 transition-colors shadow-2xs"
                     >
                       <Plus className="w-3.5 h-3.5" /> Buat Invoice Baru
@@ -1321,9 +1340,10 @@ export default function Dashboard() {
                     <input
                       type="text"
                       required
+                      placeholder="Contoh: INV-2026-1001"
                       value={newInvoice.invoiceNumber}
                       onChange={(e) => setNewInvoice({ ...newInvoice, invoiceNumber: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#DA2828]"
+                      className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 font-mono transition-all"
                     />
                   </div>
 
@@ -1331,19 +1351,22 @@ export default function Dashboard() {
                     <label className="block text-slate-700 font-bold mb-1">
                       Pilih Pelanggan <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      required
-                      value={newInvoice.customerId}
-                      onChange={(e) => setNewInvoice({ ...newInvoice, customerId: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#DA2828] bg-white"
-                    >
-                      <option value="">-- Pilih Pelanggan --</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.email})
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        required
+                        value={newInvoice.customerId}
+                        onChange={(e) => setNewInvoice({ ...newInvoice, customerId: e.target.value })}
+                        className="w-full appearance-none bg-slate-50/80 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs font-semibold text-slate-800 hover:bg-slate-100/80 focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all cursor-pointer shadow-2xs"
+                      >
+                        <option value="">-- Pilih Pelanggan --</option>
+                        {customers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.email})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   </div>
 
                   <div>
@@ -1355,11 +1378,11 @@ export default function Dashboard() {
                       required
                       value={newInvoice.dueDate}
                       onChange={(e) => setNewInvoice({ ...newInvoice, dueDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#DA2828]"
+                      className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all font-medium"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-700 font-bold mb-1">
                         Pajak PPN (%)
@@ -1368,9 +1391,10 @@ export default function Dashboard() {
                         type="number"
                         min="0"
                         max="100"
-                        value={newInvoice.taxRate}
-                        onChange={(e) => setNewInvoice({ ...newInvoice, taxRate: Number(e.target.value) })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#DA2828]"
+                        placeholder="0"
+                        value={newInvoice.taxRate === 0 ? '' : newInvoice.taxRate}
+                        onChange={(e) => setNewInvoice({ ...newInvoice, taxRate: e.target.value === '' ? 0 : Number(e.target.value) })}
+                        className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 font-mono transition-all"
                       />
                     </div>
                     <div>
@@ -1380,61 +1404,66 @@ export default function Dashboard() {
                       <input
                         type="number"
                         min="0"
-                        value={newInvoice.discount}
-                        onChange={(e) => setNewInvoice({ ...newInvoice, discount: Number(e.target.value) })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#DA2828]"
+                        placeholder="0"
+                        value={newInvoice.discount === 0 ? '' : newInvoice.discount}
+                        onChange={(e) => setNewInvoice({ ...newInvoice, discount: e.target.value === '' ? 0 : Number(e.target.value) })}
+                        className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 font-mono transition-all"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Items Section */}
-                <div className="pt-2 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-2">
+                {/* Items Section - Full Width Layout */}
+                <div className="pt-3 border-t border-slate-100">
+                  <div className="flex items-center justify-between mb-2.5">
                     <span className="font-bold text-slate-800 text-xs">Rincian Item & Jasa</span>
                     <button
                       type="button"
                       onClick={handleAddItem}
-                      className="text-xs font-bold text-[#DA2828] hover:underline flex items-center gap-1"
+                      className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" /> Tambah Baris
                     </button>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2.5 w-full">
                     {newInvoice.items.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
+                      <div key={idx} className="flex items-center gap-2.5 w-full bg-slate-50/50 p-2 rounded-xl border border-slate-100">
                         <input
                           type="text"
-                          placeholder="Deskripsi barang / layanan"
+                          placeholder="Deskripsi barang / layanan (contoh: Jasa Desain UI/UX)"
                           required
                           value={item.description}
                           onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                          className="flex-2 px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-[#DA2828]"
+                          className="flex-1 min-w-0 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all font-medium"
                         />
                         <input
                           type="number"
-                          placeholder="Qty"
+                          placeholder="1"
                           min="1"
                           required
-                          value={item.quantity}
-                          onChange={(e) => handleItemChange(idx, 'quantity', Number(e.target.value))}
-                          className="w-16 px-2.5 py-2 border border-slate-200 rounded-xl text-xs text-center focus:outline-none focus:border-[#DA2828]"
+                          value={item.quantity === 0 ? '' : item.quantity}
+                          onChange={(e) => handleItemChange(idx, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))}
+                          className="w-20 shrink-0 px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-center font-mono focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all"
                         />
                         <input
                           type="number"
-                          placeholder="Harga Satuan"
+                          placeholder="0"
                           min="0"
                           required
-                          value={item.unitPrice}
-                          onChange={(e) => handleItemChange(idx, 'unitPrice', Number(e.target.value))}
-                          className="w-32 px-3 py-2 border border-slate-200 rounded-xl text-xs text-right focus:outline-none focus:border-[#DA2828]"
+                          value={item.unitPrice === 0 ? '' : item.unitPrice}
+                          onChange={(e) => handleItemChange(idx, 'unitPrice', e.target.value === '' ? 0 : Number(e.target.value))}
+                          className="w-36 shrink-0 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-right font-mono focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all"
                         />
+                        <div className="w-32 shrink-0 text-right font-bold text-slate-800 text-xs font-mono px-1">
+                          {formatIDR((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))}
+                        </div>
                         {newInvoice.items.length > 1 && (
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
-                            className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg"
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                            title="Hapus baris"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1445,15 +1474,16 @@ export default function Dashboard() {
                 </div>
 
                 {/* Total Summary */}
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-right">
-                  <div className="text-[11px] text-slate-500">
-                    Subtotal: <span className="font-bold text-slate-800">{formatIDR(subtotalPreview)}</span>
+                <div className="p-4 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-1.5 text-right">
+                  <div className="text-xs text-slate-500">
+                    Subtotal: <span className="font-bold text-slate-800 font-mono">{formatIDR(subtotalPreview)}</span>
                   </div>
-                  <div className="text-[11px] text-slate-500">
-                    PPN ({newInvoice.taxRate}%): <span className="font-bold text-slate-800">{formatIDR(taxPreview)}</span>
+                  <div className="text-xs text-slate-500">
+                    PPN ({newInvoice.taxRate}%): <span className="font-bold text-slate-800 font-mono">{formatIDR(taxPreview)}</span>
                   </div>
-                  <div className="text-sm font-extrabold text-slate-900 pt-1 border-t border-slate-200">
-                    Total: {formatIDR(totalPreview)}
+                  <div className="text-base font-extrabold text-slate-900 pt-2 border-t border-slate-200/80 flex justify-between items-center">
+                    <span className="text-xs font-bold uppercase text-slate-400 tracking-wider">Grand Total Pembayaran:</span>
+                    <span className="text-red-600 font-mono">{formatIDR(totalPreview)}</span>
                   </div>
                 </div>
 
@@ -1461,13 +1491,13 @@ export default function Dashboard() {
                   <button
                     type="button"
                     onClick={() => setIsInvoiceModalOpen(false)}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50"
+                    className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-colors"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-[#DA2828] hover:bg-[#B81D1D] text-white font-bold rounded-xl transition-all shadow-sm"
+                    className="px-5 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold rounded-xl transition-all shadow-sm shadow-red-500/20 active:scale-95"
                   >
                     Simpan & Terbitkan Invoice
                   </button>
@@ -1517,9 +1547,10 @@ export default function Dashboard() {
                   <input
                     type="text"
                     required
+                    placeholder="Contoh: PT Digital Asia Utama / Budi Santoso"
                     value={newCustomer.name}
                     onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#DA2828]"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 font-medium transition-all"
                   />
                 </div>
                 <div>
@@ -1529,27 +1560,30 @@ export default function Dashboard() {
                   <input
                     type="email"
                     required
+                    placeholder="contoh: client@company.com"
                     value={newCustomer.email}
                     onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#DA2828]"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 font-medium transition-all"
                   />
                 </div>
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">Nomor Telepon</label>
                   <input
                     type="text"
+                    placeholder="contoh: 081234567890"
                     value={newCustomer.phone}
                     onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#DA2828]"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 font-medium transition-all"
                   />
                 </div>
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">Alamat Lengkap</label>
                   <textarea
                     rows={2}
+                    placeholder="Alamat kantor / domisili pengiriman invoice..."
                     value={newCustomer.address}
                     onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#DA2828]"
+                    className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 font-medium transition-all"
                   />
                 </div>
 
@@ -1569,6 +1603,69 @@ export default function Dashboard() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ==================================================== */}
+      {/* MODAL: NO CUSTOMER WARNING POPUP */}
+      {/* ==================================================== */}
+      <AnimatePresence>
+        {noCustomerWarningOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setNoCustomerWarningOpen(false)}
+              className="fixed inset-0 bg-slate-900/40"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden z-10 p-6 space-y-4 text-xs"
+            >
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 font-bold flex items-center justify-center text-sm shadow-2xs shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 font-display">
+                    Data Pelanggan Masih Kosong
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Pelanggan dibutuhkan sebelum menerbitkan invoice
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-slate-600 text-xs leading-relaxed">
+                Anda belum memiliki data pelanggan yang terdaftar di workspace ini. Silakan tambahkan minimal 1 data pelanggan terlebih dahulu sebelum membuat invoice.
+              </p>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNoCustomerWarningOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNoCustomerWarningOpen(false);
+                    setIsCustomerModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-sm shadow-red-500/20 active:scale-95 flex items-center gap-1.5"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Tambah Data Pelanggan</span>
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
@@ -1854,35 +1951,41 @@ export default function Dashboard() {
                     <label className="block text-slate-700 font-bold mb-1">
                       Pelanggan <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      required
-                      value={newProject.customerId}
-                      onChange={(e) => setNewProject({ ...newProject, customerId: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500 bg-white"
-                    >
-                      <option value="">-- Pilih Pelanggan --</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        required
+                        value={newProject.customerId}
+                        onChange={(e) => setNewProject({ ...newProject, customerId: e.target.value })}
+                        className="w-full appearance-none bg-slate-50/80 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs font-semibold text-slate-800 hover:bg-slate-100/80 focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all cursor-pointer shadow-2xs"
+                      >
+                        <option value="">-- Pilih Pelanggan --</option>
+                        {customers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-slate-700 font-bold mb-1">Tipe Penagihan</label>
-                    <select
-                      value={newProject.billingType}
-                      onChange={(e) =>
-                        setNewProject({ ...newProject, billingType: e.target.value as any })
-                      }
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500 bg-white"
-                    >
-                      <option value="milestone">Milestone / Termin (DP %)</option>
-                      <option value="fixed">Fixed Single Invoice</option>
-                      <option value="hourly">Time & Material (Hourly)</option>
-                      <option value="retainer">Monthly Retainer</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={newProject.billingType}
+                        onChange={(e) =>
+                          setNewProject({ ...newProject, billingType: e.target.value as any })
+                        }
+                        className="w-full appearance-none bg-slate-50/80 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs font-semibold text-slate-800 hover:bg-slate-100/80 focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all cursor-pointer shadow-2xs"
+                      >
+                        <option value="milestone">Milestone / Termin (DP %)</option>
+                        <option value="fixed">Fixed Single Invoice</option>
+                        <option value="hourly">Time & Material (Hourly)</option>
+                        <option value="retainer">Monthly Retainer</option>
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   </div>
                 </div>
 
@@ -1892,9 +1995,10 @@ export default function Dashboard() {
                     <input
                       type="number"
                       min="0"
-                      value={newProject.totalBudget}
-                      onChange={(e) => setNewProject({ ...newProject, totalBudget: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500 font-mono"
+                      placeholder="0"
+                      value={newProject.totalBudget === 0 ? '' : newProject.totalBudget}
+                      onChange={(e) => setNewProject({ ...newProject, totalBudget: e.target.value === '' ? 0 : Number(e.target.value) })}
+                      className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 font-mono transition-all"
                     />
                   </div>
                   {newProject.billingType === 'hourly' && (
@@ -1903,9 +2007,10 @@ export default function Dashboard() {
                       <input
                         type="number"
                         min="0"
-                        value={newProject.hourlyRate}
-                        onChange={(e) => setNewProject({ ...newProject, hourlyRate: Number(e.target.value) })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500 font-mono"
+                        placeholder="0"
+                        value={newProject.hourlyRate === 0 ? '' : newProject.hourlyRate}
+                        onChange={(e) => setNewProject({ ...newProject, hourlyRate: e.target.value === '' ? 0 : Number(e.target.value) })}
+                        className="w-full px-3.5 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 font-mono transition-all"
                       />
                     </div>
                   )}
@@ -2178,15 +2283,18 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">Tipe Workspace</label>
-                  <select
-                    value={newWorkspace.type}
-                    onChange={(e) => setNewWorkspace({ ...newWorkspace, type: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all bg-white"
-                  >
-                    <option value="company">Company / Korporasi</option>
-                    <option value="umkm">UMKM / Bisnis Kecil</option>
-                    <option value="personal">Personal / Freelance</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={newWorkspace.type}
+                      onChange={(e) => setNewWorkspace({ ...newWorkspace, type: e.target.value })}
+                      className="w-full appearance-none bg-slate-50/80 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs font-semibold text-slate-800 hover:bg-slate-100/80 focus:bg-white focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <option value="company">Company / Korporasi</option>
+                      <option value="umkm">UMKM / Bisnis Kecil</option>
+                      <option value="personal">Personal / Freelance</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-2">

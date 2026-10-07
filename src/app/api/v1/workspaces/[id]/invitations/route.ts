@@ -3,10 +3,10 @@ import { AuthService } from '@/services/auth.service';
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const workspaceId = params.id;
+    const { id: workspaceId } = await params;
     const body = await req.json();
     const { inviterId, email, roleId } = body;
 

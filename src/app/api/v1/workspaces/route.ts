@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { WorkspaceService } from '@/services/workspace.service';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const workspaces = await WorkspaceService.getAllWorkspaces();

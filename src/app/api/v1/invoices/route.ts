@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { InvoiceService } from '@/services/invoice.service';
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
   try {
-    const invoices = await InvoiceService.getAllInvoices();
+    const { searchParams } = new URL(request.url);
+    const workspaceId = searchParams.get('workspaceId') || request.headers.get('x-workspace-id') || undefined;
+    const invoices = await InvoiceService.getAllInvoices(workspaceId);
     return NextResponse.json(invoices);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to fetch invoices' }, { status: 500 });
@@ -20,7 +24,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const invoice = await InvoiceService.createInvoice(body);
+    const workspaceId = body.workspaceId || request.headers.get('x-workspace-id') || undefined;
+    const invoice = await InvoiceService.createInvoice({ ...body, workspaceId });
     return NextResponse.json(invoice, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to create invoice' }, { status: 500 });

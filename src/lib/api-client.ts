@@ -114,10 +114,11 @@ class ApiClient {
   private async fetcher<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const response = await fetch(url, {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...((options?.headers as Record<string, string>) || {}),
       },
-      ...options,
     });
 
     if (!response.ok) {
@@ -153,30 +154,38 @@ class ApiClient {
   }
 
   // Customers API
-  async getCustomers(): Promise<CustomerDTO[]> {
-    return this.fetcher('/customers');
+  async getCustomers(workspaceId?: string): Promise<CustomerDTO[]> {
+    const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';
+    return this.fetcher(`/customers${query}`, {
+      headers: workspaceId ? { 'x-workspace-id': workspaceId } : {},
+    });
   }
 
-  async createCustomer(customer: Omit<CustomerDTO, 'id'>): Promise<CustomerDTO> {
+  async createCustomer(customer: Omit<CustomerDTO, 'id'> & { workspaceId?: string }): Promise<CustomerDTO> {
     return this.fetcher('/customers', {
       method: 'POST',
       body: JSON.stringify(customer),
+      headers: customer.workspaceId ? { 'x-workspace-id': customer.workspaceId } : {},
     });
   }
 
   // Invoices API
-  async getInvoices(): Promise<InvoiceDTO[]> {
-    return this.fetcher('/invoices');
+  async getInvoices(workspaceId?: string): Promise<InvoiceDTO[]> {
+    const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';
+    return this.fetcher(`/invoices${query}`, {
+      headers: workspaceId ? { 'x-workspace-id': workspaceId } : {},
+    });
   }
 
   async getInvoiceById(id: string): Promise<InvoiceDTO> {
     return this.fetcher(`/invoices/${id}`);
   }
 
-  async createInvoice(invoice: Omit<InvoiceDTO, 'id' | 'totalAmount'>): Promise<InvoiceDTO> {
+  async createInvoice(invoice: Omit<InvoiceDTO, 'id' | 'totalAmount'> & { workspaceId?: string }): Promise<InvoiceDTO> {
     return this.fetcher('/invoices', {
       method: 'POST',
       body: JSON.stringify(invoice),
+      headers: invoice.workspaceId ? { 'x-workspace-id': invoice.workspaceId } : {},
     });
   }
 
@@ -194,18 +203,22 @@ class ApiClient {
   }
 
   // Projects API
-  async getProjects(): Promise<ProjectDTO[]> {
-    return this.fetcher('/projects');
+  async getProjects(workspaceId?: string): Promise<ProjectDTO[]> {
+    const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';
+    return this.fetcher(`/projects${query}`, {
+      headers: workspaceId ? { 'x-workspace-id': workspaceId } : {},
+    });
   }
 
   async getProjectById(id: string): Promise<ProjectDTO> {
     return this.fetcher(`/projects/${id}`);
   }
 
-  async createProject(project: Omit<ProjectDTO, 'id' | 'billedAmount' | 'percentBilled'>): Promise<ProjectDTO> {
+  async createProject(project: Omit<ProjectDTO, 'id' | 'billedAmount' | 'percentBilled'> & { workspaceId?: string }): Promise<ProjectDTO> {
     return this.fetcher('/projects', {
       method: 'POST',
       body: JSON.stringify(project),
+      headers: project.workspaceId ? { 'x-workspace-id': project.workspaceId } : {},
     });
   }
 
