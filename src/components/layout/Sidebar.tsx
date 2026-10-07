@@ -17,13 +17,13 @@ import {
   CreditCard,
   UserPlus,
   FileSpreadsheet,
+  FolderKanban,
   Store,
-  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { WorkspaceDTO } from "@/lib/api-client";
 
-export type NavigationTab = 'dashboard' | 'invoices' | 'customers' | 'company' | 'products';
+export type NavigationTab = 'dashboard' | 'invoices' | 'projects' | 'customers' | 'company' | 'products';
 
 interface SidebarProps {
   mobileOpen?: boolean;
@@ -290,6 +290,25 @@ export default function Sidebar({
                 MASTER DATA
               </span>
             </div>
+
+            {/* Submenu Item Projects */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('projects')}
+              title={isCollapsed ? "Kelola Project" : undefined}
+              className={`w-full flex items-center gap-2.5 rounded-xl text-xs transition-all ${
+                isCollapsed ? "lg:justify-center lg:px-0 py-2.5 px-2.5" : "px-3 py-2.5"
+              } ${
+                activeTab === 'projects'
+                  ? "text-red-600 bg-red-50/80 font-bold shadow-2xs border border-red-100/60"
+                  : "text-slate-600 font-medium hover:text-slate-900 hover:bg-slate-50"
+              }`}
+            >
+              <FolderKanban className={`w-4 h-4 shrink-0 ${activeTab === 'projects' ? 'text-red-600' : 'text-slate-500'}`} />
+              <span className={isCollapsed ? "lg:hidden" : "block"}>
+                Kelola Project & Milestone
+              </span>
+            </button>
 
             {/* Submenu Item Customers */}
             <div>

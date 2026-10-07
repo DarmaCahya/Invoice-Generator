@@ -25,6 +25,36 @@ export interface InvoiceItemDTO {
   amount: number;
 }
 
+export interface ProjectMilestoneDTO {
+  id?: string;
+  title: string;
+  description?: string;
+  amount: number;
+  percentage: number;
+  status?: 'pending' | 'in_progress' | 'completed' | 'billed';
+  dueDate?: string;
+  invoiceId?: string;
+}
+
+export interface ProjectDTO {
+  id?: string;
+  workspaceId?: string;
+  customerId: string;
+  customer?: CustomerDTO;
+  name: string;
+  description?: string;
+  billingType: 'milestone' | 'fixed' | 'hourly' | 'retainer';
+  totalBudget: number;
+  hourlyRate?: number;
+  status: 'active' | 'completed' | 'archived';
+  startDate?: string;
+  endDate?: string;
+  milestones?: ProjectMilestoneDTO[];
+  invoices?: InvoiceDTO[];
+  billedAmount?: number;
+  percentBilled?: number;
+}
+
 export interface InvoiceDTO {
   id?: string;
   invoiceNumber: string;
@@ -37,6 +67,8 @@ export interface InvoiceDTO {
   notes?: string;
   customerId: string;
   customer?: CustomerDTO;
+  projectId?: string;
+  project?: { id: string; name: string };
   items: InvoiceItemDTO[];
 }
 
@@ -158,7 +190,43 @@ class ApiClient {
   async deleteInvoice(id: string): Promise<{ success: boolean }> {
     return this.fetcher(`/invoices/${id}`, {
       method: 'DELETE',
-      });
+    });
+  }
+
+  // Projects API
+  async getProjects(): Promise<ProjectDTO[]> {
+    return this.fetcher('/projects');
+  }
+
+  async getProjectById(id: string): Promise<ProjectDTO> {
+    return this.fetcher(`/projects/${id}`);
+  }
+
+  async createProject(project: Omit<ProjectDTO, 'id' | 'billedAmount' | 'percentBilled'>): Promise<ProjectDTO> {
+    return this.fetcher('/projects', {
+      method: 'POST',
+      body: JSON.stringify(project),
+    });
+  }
+
+  async updateProject(id: string, projectData: Partial<ProjectDTO>): Promise<ProjectDTO> {
+    return this.fetcher(`/projects/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(projectData),
+    });
+  }
+
+  async deleteProject(id: string): Promise<{ success: boolean }> {
+    return this.fetcher(`/projects/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async createInvoiceFromProject(projectId: string, milestoneId?: string): Promise<InvoiceDTO> {
+    return this.fetcher(`/projects/${projectId}/invoices`, {
+      method: 'POST',
+      body: JSON.stringify({ milestoneId }),
+    });
   }
 }
 

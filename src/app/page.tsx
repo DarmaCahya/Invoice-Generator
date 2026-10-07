@@ -26,8 +26,16 @@ import {
   Store,
   Layers,
   Sparkles,
+  FolderKanban,
+  Send,
+  Share2,
+  Printer,
+  QrCode,
+  Copy,
+  FileText,
+  CheckCircle,
 } from 'lucide-react';
-import { apiClient, InvoiceDTO, CustomerDTO, WorkspaceDTO } from '@/lib/api-client';
+import { apiClient, InvoiceDTO, CustomerDTO, WorkspaceDTO, ProjectDTO } from '@/lib/api-client';
 import Sidebar, { NavigationTab } from '@/components/layout/Sidebar';
 import DashboardHeader from '@/components/layout/DashboardHeader';
 import {
@@ -58,7 +66,27 @@ export default function Dashboard() {
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
+  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDTO | null>(null);
+  const [selectedProject, setSelectedProject] = useState<ProjectDTO | null>(null);
+
+  // Projects State
+  const [projects, setProjects] = useState<ProjectDTO[]>([]);
+
+  // New Project Form State
+  const [newProject, setNewProject] = useState({
+    name: '',
+    customerId: '',
+    description: '',
+    billingType: 'milestone' as 'milestone' | 'fixed' | 'hourly' | 'retainer',
+    totalBudget: 15000000,
+    hourlyRate: 150000,
+    milestones: [
+      { title: 'DP 50% Inisiasi & Desain UI/UX', amount: 7500000, percentage: 50 },
+      { title: 'Termin 2 - Implementation & API', amount: 4500000, percentage: 30 },
+      { title: 'Pelunasan 20% - Deployment & Handover', amount: 3000000, percentage: 20 },
+    ],
+  });
 
   // Invite Member Form
   const [inviteEmail, setInviteEmail] = useState('');
@@ -96,7 +124,7 @@ export default function Dashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [workspacesRes, invoicesRes, customersRes] = await Promise.all([
+      const [workspacesRes, invoicesRes, customersRes, projectsRes] = await Promise.all([
         apiClient.getWorkspaces().catch(() => [
           { id: 'ws-1', name: 'Cendana Tech Solution', type: 'company', slug: 'cendana-tech' },
           { id: 'ws-2', name: 'PT Digital Asia Utama', type: 'company', slug: 'digital-asia' },
@@ -104,11 +132,13 @@ export default function Dashboard() {
         ]),
         apiClient.getInvoices().catch(() => []),
         apiClient.getCustomers().catch(() => []),
+        apiClient.getProjects().catch(() => []),
       ]);
 
       setWorkspaces(workspacesRes);
       setInvoices(invoicesRes);
       setCustomers(customersRes);
+      setProjects(projectsRes);
 
       if (workspacesRes.length > 0) {
         setActiveWorkspaceId((prev) => prev || workspacesRes[0].id);
@@ -334,6 +364,68 @@ export default function Dashboard() {
     }
   };
 
+  // Submit New Project
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProject.name || !newProject.customerId) {
+      alert('Nama project dan pelanggan wajib diisi.');
+      return;
+    }
+
+    try {
+      await apiClient.createProject({
+        ...newProject,
+        workspaceId: activeWorkspaceId,
+        status: 'active',
+      });
+      setIsProjectModalOpen(false);
+      setNewProject({
+        name: '',
+        customerId: '',
+        description: '',
+        billingType: 'milestone',
+        totalBudget: 15000000,
+        hourlyRate: 150000,
+        milestones: [
+          { title: 'DP 50% Inisiasi & Desain UI/UX', amount: 7500000, percentage: 50 },
+          { title: 'Termin 2 - Implementation & API', amount: 4500000, percentage: 30 },
+          { title: 'Pelunasan 20% - Deployment & Handover', amount: 3000000, percentage: 20 },
+        ],
+      });
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Gagal membuat project.');
+    }
+  };
+
+  // 1-Click Invoice Generator from Project
+  const handleCreateInvoiceFromProject = async (projectId: string, milestoneId?: string) => {
+    try {
+      const generatedInvoice = await apiClient.createInvoiceFromProject(projectId, milestoneId);
+      await fetchData();
+      setSelectedInvoice(generatedInvoice);
+    } catch (err: any) {
+      alert(err.message || 'Gagal generate invoice dari project.');
+    }
+  };
+
+  // WhatsApp Share Handler
+  const handleShareWhatsApp = (inv: InvoiceDTO) => {
+    const custName = inv.customer?.name || 'Pelanggan';
+    const amount = formatIDR(inv.totalAmount || 0);
+    const text = encodeURIComponent(
+      `Halo *${custName}*,\n\nBerikut rincian tagihan invoice resmi Anda:\n📄 *No. Invoice:* ${inv.invoiceNumber}\n💰 *Total Tagihan:* ${amount}\n📅 *Jatuh Tempo:* ${inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('id-ID') : '-'}\n\nSilakan lakukan pembayaran sesuai instruksi pada lembar invoice. Terima kasih!`
+    );
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+  };
+
+  // Copy Invoice Link Handler
+  const handleCopyInvoiceLink = (inv: InvoiceDTO) => {
+    const url = `${window.location.origin}/invoice/${inv.id || inv.invoiceNumber}`;
+    navigator.clipboard.writeText(url);
+    alert('Tautan Invoice berhasil disalin ke clipboard!');
+  };
+
   // Create Workspace
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -441,6 +533,7 @@ export default function Dashboard() {
                 <h1 className="text-2xl font-bold font-display text-slate-900 tracking-tight flex items-center gap-2">
                   {activeTab === 'dashboard' && 'Dashboard Utama'}
                   {activeTab === 'invoices' && 'Kelola Faktur & Invoice'}
+                  {activeTab === 'projects' && 'Kelola Project & Milestone Penagihan'}
                   {activeTab === 'customers' && 'Data Master Pelanggan'}
                   {activeTab === 'company' && 'Pengaturan Perusahaan & Tim'}
                 </h1>
@@ -453,6 +546,13 @@ export default function Dashboard() {
               </div>
 
               <div className="flex items-center gap-2.5 shrink-0">
+                <button
+                  onClick={() => setIsProjectModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all shadow-2xs"
+                >
+                  <FolderKanban className="w-3.5 h-3.5 text-red-600" />
+                  <span>Tambah Project Baru</span>
+                </button>
                 <button
                   onClick={() => setIsCustomerModalOpen(true)}
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all shadow-2xs"
@@ -852,6 +952,169 @@ export default function Dashboard() {
                         })}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* VIEW: PROJECTS & MILESTONES */}
+            {activeTab === 'projects' && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600 font-bold">
+                      <FolderKanban className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-slate-900 font-display">
+                        Project & Skema Penagihan ({projects.length})
+                      </h3>
+                      <p className="text-slate-500 text-xs">
+                        Buat invoice 1-Click dari termin milestone, fixed single, hourly, atau retainer.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setIsProjectModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors shadow-2xs self-start sm:self-auto"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Buat Project Baru</span>
+                  </button>
+                </div>
+
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <Loader2 className="w-8 h-8 animate-spin mb-2 text-red-600" />
+                    <p className="text-xs font-medium">Memuat daftar project...</p>
+                  </div>
+                ) : projects.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-slate-200/90 p-12 text-center text-slate-400 space-y-3">
+                    <FolderKanban className="w-10 h-10 mx-auto text-slate-300" />
+                    <p className="text-xs font-semibold text-slate-600">
+                      Belum ada project yang dibuat.
+                    </p>
+                    <button
+                      onClick={() => setIsProjectModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 transition-colors shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Buat Project Pertama
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {projects.map((proj) => {
+                      const percentBilled = proj.percentBilled || 0;
+                      const billedAmount = proj.billedAmount || 0;
+
+                      return (
+                        <div
+                          key={proj.id}
+                          className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs hover:border-slate-300 hover:shadow-md transition-all space-y-4 flex flex-col justify-between"
+                        >
+                          <div className="space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 mb-1">
+                                  {proj.billingType === 'milestone'
+                                    ? 'Milestone / Termin'
+                                    : proj.billingType === 'fixed'
+                                    ? 'Fixed Price'
+                                    : proj.billingType === 'hourly'
+                                    ? 'Hourly Rate'
+                                    : 'Monthly Retainer'}
+                                </span>
+                                <h4 className="font-bold text-sm text-slate-900 font-display leading-tight">
+                                  {proj.name}
+                                </h4>
+                                <p className="text-[11px] text-slate-400 font-medium">
+                                  Pelanggan: <span className="text-slate-700 font-bold">{proj.customer?.name || 'Umum'}</span>
+                                </p>
+                              </div>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  proj.status === 'completed'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                                }`}
+                              >
+                                {proj.status === 'completed' ? 'Selesai' : 'Aktif'}
+                              </span>
+                            </div>
+
+                            {/* Budget & Progress % Billed */}
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2">
+                              <div className="flex justify-between text-xs font-semibold">
+                                <span className="text-slate-500">Budget Total:</span>
+                                <span className="text-slate-900 font-bold">{formatIDR(proj.totalBudget)}</span>
+                              </div>
+                              <div className="flex justify-between text-[11px] text-slate-400 font-medium">
+                                <span>Ditagihkan ({percentBilled}%):</span>
+                                <span className="text-red-600 font-bold">{formatIDR(billedAmount)}</span>
+                              </div>
+                              {/* Progress bar */}
+                              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                                <div
+                                  className="bg-red-600 h-full transition-all duration-300"
+                                  style={{ width: `${percentBilled}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Milestones Preview List */}
+                            {proj.milestones && proj.milestones.length > 0 && (
+                              <div className="space-y-1.5 pt-1">
+                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                                  Termin & Milestone:
+                                </span>
+                                <div className="space-y-1">
+                                  {proj.milestones.map((m) => (
+                                    <div
+                                      key={m.id}
+                                      className="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 border border-slate-100"
+                                    >
+                                      <div className="truncate max-w-[160px]">
+                                        <div className="font-semibold text-slate-800 truncate">{m.title}</div>
+                                        <div className="text-[10px] text-slate-400">{formatIDR(m.amount)}</div>
+                                      </div>
+                                      {m.status === 'billed' ? (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                          Sudah Ditagih
+                                        </span>
+                                      ) : (
+                                        <button
+                                          onClick={() => proj.id && handleCreateInvoiceFromProject(proj.id, m.id)}
+                                          className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shadow-2xs flex items-center gap-1"
+                                        >
+                                          <Plus className="w-3 h-3" /> 1-Click Invoice
+                                        </button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Card Footer Actions */}
+                          <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                            <button
+                              onClick={() => setSelectedProject(proj)}
+                              className="text-xs font-bold text-slate-700 hover:text-red-600 transition-colors flex items-center gap-1"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> Detail Project
+                            </button>
+                            <button
+                              onClick={() => proj.id && handleCreateInvoiceFromProject(proj.id)}
+                              className="px-3 py-1.5 bg-gradient-to-r from-red-600 to-rose-600 text-white text-xs font-bold rounded-xl hover:from-red-700 hover:to-rose-700 transition-all shadow-2xs flex items-center gap-1"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" /> Generate Invoice
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1312,7 +1575,7 @@ export default function Dashboard() {
       </AnimatePresence>
 
       {/* ==================================================== */}
-      {/* MODAL: VIEW INVOICE DETAIL & PRINT */}
+      {/* MODAL: VIEW INVOICE DETAIL & PRINT PREVIEW */}
       {/* ==================================================== */}
       <AnimatePresence>
         {selectedInvoice && (
@@ -1322,105 +1585,542 @@ export default function Dashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedInvoice(null)}
+              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden z-10 p-6 sm:p-8 space-y-6 text-xs max-h-[92vh] overflow-y-auto"
+            >
+              {/* Header Toolbar */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-red-600 to-rose-600 text-white font-bold flex items-center justify-center shadow-md shadow-red-500/20">
+                    <Receipt className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      LEMBAR PRATAMPIN INVOICE
+                    </span>
+                    <h3 className="font-extrabold text-lg text-slate-900 font-display">
+                      {selectedInvoice.invoiceNumber}
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedInvoice(null)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Printable Invoice Paper Area */}
+              <div className="bg-slate-50/50 border border-slate-200/90 rounded-2xl p-6 space-y-6">
+                {/* Paper Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+                  <div>
+                    <h2 className="font-display font-extrabold text-xl text-slate-900 tracking-tight">
+                      {activeWorkspace?.name || 'Cendana Tech Solution'}
+                    </h2>
+                    <p className="text-slate-500 text-[11px] font-medium mt-0.5">
+                      Faktur Tagihan Resmi Penagihan Project & Layanan
+                    </p>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <span
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${
+                        selectedInvoice.status.toUpperCase() === 'PAID'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}
+                    >
+                      {selectedInvoice.status.toUpperCase() === 'PAID' ? (
+                        <>
+                          <CheckCircle className="w-3.5 h-3.5" /> LUNAS
+                        </>
+                      ) : (
+                        <>
+                          <Clock className="w-3.5 h-3.5" /> MENUNGGU PEMBAYARAN
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Customer & Dates Info */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                      DITAGIHKAN KEPADA:
+                    </span>
+                    <div className="font-bold text-slate-900 text-sm">
+                      {selectedInvoice.customer?.name || 'Pelanggan'}
+                    </div>
+                    <div className="text-slate-600 font-mono text-[11px]">
+                      {selectedInvoice.customer?.email || '-'}
+                    </div>
+                    <div className="text-slate-500 text-[11px]">
+                      {selectedInvoice.customer?.address || '-'}
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 space-y-1.5 text-right">
+                    <div className="flex justify-between sm:justify-end gap-3 text-slate-600">
+                      <span className="text-slate-400 font-medium">Tanggal Terbit:</span>
+                      <span className="font-semibold text-slate-800">
+                        {selectedInvoice.issueDate ? new Date(selectedInvoice.issueDate).toLocaleDateString('id-ID') : '-'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between sm:justify-end gap-3 text-slate-600">
+                      <span className="text-slate-400 font-medium">Jatuh Tempo:</span>
+                      <span className="font-bold text-red-600">
+                        {selectedInvoice.dueDate ? new Date(selectedInvoice.dueDate).toLocaleDateString('id-ID') : '-'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between sm:justify-end gap-3 text-slate-600">
+                      <span className="text-slate-400 font-medium">Mata Uang:</span>
+                      <span className="font-semibold text-slate-800">IDR (Rupiah)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Items Table */}
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100/80 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="py-2.5 px-3.5">Deskripsi Item / Layanan</th>
+                        <th className="py-2.5 px-3.5 text-center">Qty</th>
+                        <th className="py-2.5 px-3.5 text-right">Harga Satuan</th>
+                        <th className="py-2.5 px-3.5 text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedInvoice.items?.map((it, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="py-3 px-3.5 font-medium text-slate-900">{it.description}</td>
+                          <td className="py-3 px-3.5 text-center text-slate-600 font-mono">{it.quantity}</td>
+                          <td className="py-3 px-3.5 text-right text-slate-600 font-mono">{formatIDR(it.unitPrice)}</td>
+                          <td className="py-3 px-3.5 text-right font-bold text-slate-900 font-mono">
+                            {formatIDR((it.quantity || 1) * (it.unitPrice || 0))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Total Calculations */}
+                <div className="flex justify-end">
+                  <div className="w-full sm:w-72 bg-white border border-slate-200 rounded-xl p-3.5 space-y-2 text-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Subtotal:</span>
+                      <span className="font-mono">{formatIDR(selectedInvoice.totalAmount || 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>PPN (11%):</span>
+                      <span className="font-mono">Termasuk</span>
+                    </div>
+                    <div className="pt-2 border-t border-slate-100 flex justify-between font-extrabold text-slate-900 text-sm">
+                      <span>Total Tagihan:</span>
+                      <span className="text-red-600 font-mono">{formatIDR(selectedInvoice.totalAmount || 0)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Instructions & QRIS Container */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-red-600" /> Instruksi Pembayaran Bank
+                    </span>
+                    <div className="space-y-1.5 text-xs text-slate-700">
+                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="font-bold text-slate-900">Bank BCA</div>
+                        <div className="font-mono font-semibold text-red-600">8270192837</div>
+                        <div className="text-[10px] text-slate-400">a.n. PT Cendana Tech Solution</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="font-bold text-slate-900">Bank Mandiri</div>
+                        <div className="font-mono font-semibold text-red-600">1370019283711</div>
+                        <div className="text-[10px] text-slate-400">a.n. PT Cendana Tech Solution</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col items-center justify-center text-center space-y-2">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                      <QrCode className="w-3.5 h-3.5 text-red-600" /> Scan QRIS Transfer
+                    </span>
+                    <div className="w-24 h-24 bg-slate-900 text-white rounded-xl flex flex-col items-center justify-center p-2 font-mono text-[9px] font-bold border border-slate-800 shadow-inner">
+                      <QrCode className="w-12 h-12 text-white mb-1" />
+                      QRIS ACTIVE
+                    </div>
+                    <p className="text-[10px] text-slate-400">Scan via GoPay, OVO, Dana, BCA Mobile</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Bottom Action Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors shadow-2xs flex items-center gap-1.5"
+                  >
+                    <Printer className="w-3.5 h-3.5" /> Cetak / PDF
+                  </button>
+                  <button
+                    onClick={() => handleShareWhatsApp(selectedInvoice)}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors shadow-2xs flex items-center gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" /> WhatsApp
+                  </button>
+                  <button
+                    onClick={() => handleCopyInvoiceLink(selectedInvoice)}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-slate-500" /> Salin Link
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setSelectedInvoice(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-colors"
+                >
+                  Tutup
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ==================================================== */}
+      {/* MODAL: CREATE PROJECT */}
+      {/* ==================================================== */}
+      <AnimatePresence>
+        {isProjectModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsProjectModalOpen(false)}
               className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden z-10 p-6 space-y-5 text-xs max-h-[90vh] overflow-y-auto"
+              className="relative w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-10 p-6 space-y-4 text-xs max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-red-50 text-red-600 flex items-center justify-center font-bold border border-red-100">
+                    <FolderKanban className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-bold text-sm text-slate-900 font-display">
+                    Tambah Project & Skema Penagihan
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsProjectModalOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateProject} className="space-y-4">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    Nama Project <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Website E-Commerce & Payment Gateway"
+                    value={newProject.name}
+                    onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Pelanggan <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={newProject.customerId}
+                      onChange={(e) => setNewProject({ ...newProject, customerId: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500 bg-white"
+                    >
+                      <option value="">-- Pilih Pelanggan --</option>
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Tipe Penagihan</label>
+                    <select
+                      value={newProject.billingType}
+                      onChange={(e) =>
+                        setNewProject({ ...newProject, billingType: e.target.value as any })
+                      }
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500 bg-white"
+                    >
+                      <option value="milestone">Milestone / Termin (DP %)</option>
+                      <option value="fixed">Fixed Single Invoice</option>
+                      <option value="hourly">Time & Material (Hourly)</option>
+                      <option value="retainer">Monthly Retainer</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Total Budget (IDR)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newProject.totalBudget}
+                      onChange={(e) => setNewProject({ ...newProject, totalBudget: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500 font-mono"
+                    />
+                  </div>
+                  {newProject.billingType === 'hourly' && (
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">Tarif Per Jam (IDR)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={newProject.hourlyRate}
+                        onChange={(e) => setNewProject({ ...newProject, hourlyRate: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500 font-mono"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Deskripsi Scope Project</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Catatan scope pekerjaan & batasan project..."
+                    value={newProject.description}
+                    onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500"
+                  />
+                </div>
+
+                {/* Dynamic Milestones for Milestone Billing */}
+                {newProject.billingType === 'milestone' && (
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 text-xs">Rincian Termin / Milestone</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNewProject({
+                            ...newProject,
+                            milestones: [
+                              ...newProject.milestones,
+                              { title: 'Termin Baru', amount: 3000000, percentage: 20 },
+                            ],
+                          })
+                        }
+                        className="text-xs font-bold text-red-600 hover:underline flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Tambah Termin
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {newProject.milestones.map((m, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="Nama Termin (e.g. DP 50%)"
+                            required
+                            value={m.title}
+                            onChange={(e) => {
+                              const updated = [...newProject.milestones];
+                              updated[idx].title = e.target.value;
+                              setNewProject({ ...newProject, milestones: updated });
+                            }}
+                            className="flex-1 px-3 py-1.5 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-red-500"
+                          />
+                          <input
+                            type="number"
+                            placeholder="Nominal (IDR)"
+                            min="0"
+                            required
+                            value={m.amount}
+                            onChange={(e) => {
+                              const updated = [...newProject.milestones];
+                              updated[idx].amount = Number(e.target.value);
+                              setNewProject({ ...newProject, milestones: updated });
+                            }}
+                            className="w-28 px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs text-right font-mono focus:outline-none focus:border-red-500"
+                          />
+                          {newProject.milestones.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setNewProject({
+                                  ...newProject,
+                                  milestones: newProject.milestones.filter((_, i) => i !== idx),
+                                })
+                              }
+                              className="p-1.5 text-slate-400 hover:text-red-600"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsProjectModalOpen(false)}
+                    className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-sm shadow-red-500/20 active:scale-95"
+                  >
+                    Simpan Project
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ==================================================== */}
+      {/* MODAL: PROJECT DETAIL */}
+      {/* ==================================================== */}
+      <AnimatePresence>
+        {selectedProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedProject(null)}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden z-10 p-6 space-y-4 text-xs"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 font-bold flex items-center justify-center border border-red-100 shadow-2xs">
-                    <Receipt className="w-4 h-4" />
+                    <FolderKanban className="w-4 h-4" />
                   </div>
                   <div>
                     <h3 className="font-bold text-base text-slate-900 font-display">
-                      Faktur {selectedInvoice.invoiceNumber}
+                      {selectedProject.name}
                     </h3>
-                    <p className="text-[11px] text-slate-400 font-medium">
-                      Diterbitkan oleh {activeWorkspace?.name}
+                    <p className="text-[11px] text-slate-400">
+                      Pelanggan: <span className="font-bold text-slate-700">{selectedProject.customer?.name}</span>
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setSelectedInvoice(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                  onClick={() => setSelectedProject(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Invoice details */}
-              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+              {/* Budget summary */}
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Kepada:</span>
-                  <div className="font-bold text-slate-800 text-sm mt-0.5">
-                    {selectedInvoice.customer?.name}
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Budget Total:</span>
+                  <div className="font-bold text-slate-900 text-sm mt-0.5">
+                    {formatIDR(selectedProject.totalBudget)}
                   </div>
-                  <div className="text-slate-500 text-[11px]">{selectedInvoice.customer?.email}</div>
-                  <div className="text-slate-500 text-[11px]">{selectedInvoice.customer?.address}</div>
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Status Tagihan:</span>
-                  <div className="mt-0.5">
-                    <span
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                        selectedInvoice.status.toUpperCase() === 'PAID'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Persentase Ditagih:</span>
+                  <div className="font-bold text-red-600 text-sm mt-0.5">
+                    {selectedProject.percentBilled || 0}% ({formatIDR(selectedProject.billedAmount || 0)})
+                  </div>
+                </div>
+              </div>
+
+              {/* Milestones list */}
+              <div className="space-y-2">
+                <span className="font-bold text-slate-800 text-xs uppercase tracking-wider text-[10px]">
+                  Milestone & Termin Penagihan
+                </span>
+                <div className="space-y-2">
+                  {selectedProject.milestones?.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200 shadow-2xs"
                     >
-                      {selectedInvoice.status.toUpperCase() === 'PAID' ? 'LUNAS' : 'BELUM DIBAYAR'}
-                    </span>
-                  </div>
-                  <div className="text-slate-400 text-[11px] mt-2 font-medium">
-                    Jatuh Tempo: {selectedInvoice.dueDate ? new Date(selectedInvoice.dueDate).toLocaleDateString('id-ID') : '-'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase">
-                    <tr>
-                      <th className="py-2.5 px-3">Deskripsi</th>
-                      <th className="py-2.5 px-3 text-center">Qty</th>
-                      <th className="py-2.5 px-3 text-right">Harga</th>
-                      <th className="py-2.5 px-3 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {selectedInvoice.items?.map((it, idx) => (
-                      <tr key={idx}>
-                        <td className="py-2.5 px-3 font-medium text-slate-800">{it.description}</td>
-                        <td className="py-2.5 px-3 text-center text-slate-600">{it.quantity}</td>
-                        <td className="py-2.5 px-3 text-right text-slate-600 font-mono">{formatIDR(it.unitPrice)}</td>
-                        <td className="py-2.5 px-3 text-right font-bold text-slate-900 font-mono">{formatIDR(it.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Grand Total */}
-              <div className="text-right space-y-1">
-                <div className="text-sm font-extrabold text-slate-900">
-                  Total Pembayaran: {formatIDR(selectedInvoice.totalAmount || 0)}
+                      <div>
+                        <div className="font-bold text-slate-900 text-xs">{m.title}</div>
+                        <div className="text-slate-500 font-mono text-[11px]">{formatIDR(m.amount)}</div>
+                      </div>
+                      {m.status === 'billed' ? (
+                        <span className="text-[11px] font-bold px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Sudah Ditagihkan
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            if (selectedProject.id) {
+                              handleCreateInvoiceFromProject(selectedProject.id, m.id);
+                              setSelectedProject(null);
+                            }
+                          }}
+                          className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-all shadow-2xs flex items-center gap-1"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" /> 1-Click Invoice
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                 <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-slate-900 text-white font-bold rounded-xl text-xs hover:bg-slate-800 transition-colors shadow-2xs"
+                  onClick={() => {
+                    if (selectedProject.id) {
+                      handleCreateInvoiceFromProject(selectedProject.id);
+                      setSelectedProject(null);
+                    }
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold rounded-xl text-xs transition-all shadow-sm flex items-center gap-1.5"
                 >
-                  Cetak / PDF
+                  <Sparkles className="w-3.5 h-3.5" /> Generate Invoice Full Project
                 </button>
                 <button
-                  onClick={() => setSelectedInvoice(null)}
+                  onClick={() => setSelectedProject(null)}
                   className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-colors"
                 >
                   Tutup
