@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 
 export interface CreateInvoiceInput {
   workspaceId?: string;
+  projectId?: string;
   templateId?: string;
   invoiceNumber: string;
   customerId: string;
@@ -154,6 +155,7 @@ export class InvoiceService {
         data: {
           workspaceId,
           customerId: input.customerId,
+          projectId: input.projectId || null,
           templateId: input.templateId || null,
           invoiceNumber: input.invoiceNumber,
           status: input.status || 'unpaid',

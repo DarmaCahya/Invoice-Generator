@@ -34,6 +34,7 @@ import {
   Copy,
   FileText,
   CheckCircle,
+  AlertCircle,
   ChevronDown,
 } from 'lucide-react';
 import { apiClient, InvoiceDTO, CustomerDTO, WorkspaceDTO, ProjectDTO } from '@/lib/api-client';
@@ -94,8 +95,8 @@ export default function Dashboard() {
     totalBudget: 0,
     hourlyRate: 0,
     milestones: [
-      { title: 'DP 50% Inisiasi & UI/UX', amount: 0, percentage: 50 },
-      { title: 'Pelunasan 50% Handover', amount: 0, percentage: 50 },
+      { title: 'Termin 1 (DP)', amount: 0, percentage: 0 },
+      { title: 'Termin 2 (Pelunasan)', amount: 0, percentage: 0 },
     ],
   });
 
@@ -440,6 +441,32 @@ export default function Dashboard() {
     alert('Tautan Invoice berhasil disalin ke clipboard!');
   };
 
+  // Sync document.title with active invoice for PDF file naming
+  useEffect(() => {
+    if (selectedInvoice) {
+      const originalTitle = document.title;
+      document.title = selectedInvoice.invoiceNumber;
+      return () => {
+        document.title = originalTitle;
+      };
+    }
+  }, [selectedInvoice]);
+
+  // Print Invoice Handler with dynamic document.title
+  const handlePrintInvoice = (inv: InvoiceDTO) => {
+    const originalTitle = document.title;
+    document.title = inv.invoiceNumber;
+    window.print();
+    const cleanup = () => {
+      if (!selectedInvoice) {
+        document.title = originalTitle;
+      }
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(cleanup, 2000);
+  };
+
   // Create Workspace
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -524,7 +551,7 @@ export default function Dashboard() {
 
       {/* Main Content Area Container */}
       <div
-        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${
+        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 no-print print:hidden ${
           sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-60'
         }`}
       >
@@ -1676,22 +1703,22 @@ export default function Dashboard() {
       {/* ==================================================== */}
       <AnimatePresence>
         {selectedInvoice && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-print-wrapper print:static print:block print:p-0 print:z-auto">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedInvoice(null)}
-              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs"
+              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs no-print print:hidden"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden z-10 p-6 sm:p-8 space-y-6 text-xs max-h-[92vh] overflow-y-auto"
+              className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden z-10 p-6 sm:p-8 space-y-6 text-xs max-h-[92vh] overflow-y-auto modal-print-card print:static print:max-w-none print:w-full print:p-0 print:border-none print:shadow-none print:rounded-none print:max-h-none print:overflow-visible print:space-y-4"
             >
-              {/* Header Toolbar */}
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              {/* Header Toolbar - Hidden during printing */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4 no-print print:hidden">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-red-600 to-rose-600 text-white font-bold flex items-center justify-center shadow-md shadow-red-500/20">
                     <Receipt className="w-5 h-5" />
@@ -1714,92 +1741,134 @@ export default function Dashboard() {
               </div>
 
               {/* Printable Invoice Paper Area */}
-              <div className="bg-slate-50/50 border border-slate-200/90 rounded-2xl p-6 space-y-6">
+              <div
+                id="printable-invoice-sheet"
+                className="bg-slate-50/50 border border-slate-200/90 rounded-2xl p-6 sm:p-7 space-y-6 print:bg-white print:border-none print:p-0 print:rounded-none print:shadow-none print:space-y-5"
+              >
                 {/* Paper Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-                  <div>
-                    <h2 className="font-display font-extrabold text-xl text-slate-900 tracking-tight">
-                      {activeWorkspace?.name || 'Cendana Tech Solution'}
-                    </h2>
-                    <p className="text-slate-500 text-[11px] font-medium mt-0.5">
-                      Faktur Tagihan Resmi Penagihan Project & Layanan
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b-2 border-slate-900 pb-5">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-slate-900 text-white font-black text-sm flex items-center justify-center shadow-sm">
+                        <Receipt className="w-5 h-5 text-red-500" />
+                      </div>
+                      <div>
+                        <h2 className="font-display font-black text-2xl text-slate-900 tracking-tight leading-none">
+                          {activeWorkspace?.name || 'Cendana Tech Solution'}
+                        </h2>
+                        <p className="text-slate-500 text-xs font-semibold mt-1">
+                          Faktur Tagihan Resmi Penjualan & Layanan
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-slate-400 text-[11px] pt-1">
+                      Divisi Billing & Keuangan • Indonesia
                     </p>
                   </div>
-                  <div className="text-left sm:text-right">
-                    <span
-                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${
-                        selectedInvoice.status.toUpperCase() === 'PAID'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}
-                    >
-                      {selectedInvoice.status.toUpperCase() === 'PAID' ? (
-                        <>
-                          <CheckCircle className="w-3.5 h-3.5" /> LUNAS
-                        </>
-                      ) : (
-                        <>
-                          <Clock className="w-3.5 h-3.5" /> MENUNGGU PEMBAYARAN
-                        </>
-                      )}
+
+                  <div className="text-left sm:text-right space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                      FAKTUR INVOICE
                     </span>
+                    <div className="font-mono font-black text-xl text-slate-900 tracking-tight">
+                      {selectedInvoice.invoiceNumber}
+                    </div>
+                    <div>
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                          selectedInvoice.status.toUpperCase() === 'PAID'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                            : selectedInvoice.status.toUpperCase() === 'OVERDUE'
+                            ? 'bg-rose-50 text-rose-700 border-rose-300'
+                            : 'bg-amber-50 text-amber-700 border-amber-300'
+                        }`}
+                      >
+                        {selectedInvoice.status.toUpperCase() === 'PAID' ? (
+                          <>
+                            <CheckCircle className="w-3.5 h-3.5" /> LUNAS
+                          </>
+                        ) : selectedInvoice.status.toUpperCase() === 'OVERDUE' ? (
+                          <>
+                            <AlertCircle className="w-3.5 h-3.5" /> JATUH TEMPO
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="w-3.5 h-3.5" /> MENUNGGU PEMBAYARAN
+                          </>
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Customer & Dates Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 space-y-1">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-4 text-xs">
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/90 space-y-1 print:border-slate-300">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
                       DITAGIHKAN KEPADA:
                     </span>
                     <div className="font-bold text-slate-900 text-sm">
                       {selectedInvoice.customer?.name || 'Pelanggan'}
                     </div>
-                    <div className="text-slate-600 font-mono text-[11px]">
+                    <div className="text-slate-600 font-mono text-xs">
                       {selectedInvoice.customer?.email || '-'}
                     </div>
-                    <div className="text-slate-500 text-[11px]">
+                    <div className="text-slate-500 text-xs leading-relaxed">
                       {selectedInvoice.customer?.address || '-'}
                     </div>
                   </div>
 
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 space-y-1.5 text-right">
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/90 space-y-2 text-right print:border-slate-300">
                     <div className="flex justify-between sm:justify-end gap-3 text-slate-600">
                       <span className="text-slate-400 font-medium">Tanggal Terbit:</span>
                       <span className="font-semibold text-slate-800">
-                        {selectedInvoice.issueDate ? new Date(selectedInvoice.issueDate).toLocaleDateString('id-ID') : '-'}
+                        {selectedInvoice.issueDate
+                          ? new Date(selectedInvoice.issueDate).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric',
+                            })
+                          : '-'}
                       </span>
                     </div>
                     <div className="flex justify-between sm:justify-end gap-3 text-slate-600">
                       <span className="text-slate-400 font-medium">Jatuh Tempo:</span>
                       <span className="font-bold text-red-600">
-                        {selectedInvoice.dueDate ? new Date(selectedInvoice.dueDate).toLocaleDateString('id-ID') : '-'}
+                        {selectedInvoice.dueDate
+                          ? new Date(selectedInvoice.dueDate).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric',
+                            })
+                          : '-'}
                       </span>
                     </div>
                     <div className="flex justify-between sm:justify-end gap-3 text-slate-600">
                       <span className="text-slate-400 font-medium">Mata Uang:</span>
-                      <span className="font-semibold text-slate-800">IDR (Rupiah)</span>
+                      <span className="font-semibold text-slate-800">IDR (Rupiah Indonesia)</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Items Table */}
-                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100/80 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs print:border-slate-300">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100/90 border-b border-slate-200 text-[10px] font-bold text-slate-600 uppercase tracking-wider print:bg-slate-100">
                       <tr>
+                        <th className="py-2.5 px-3.5 w-10 text-center">No</th>
                         <th className="py-2.5 px-3.5">Deskripsi Item / Layanan</th>
-                        <th className="py-2.5 px-3.5 text-center">Qty</th>
-                        <th className="py-2.5 px-3.5 text-right">Harga Satuan</th>
-                        <th className="py-2.5 px-3.5 text-right">Subtotal</th>
+                        <th className="py-2.5 px-3.5 text-center w-16">Qty</th>
+                        <th className="py-2.5 px-3.5 text-right w-32">Harga Satuan</th>
+                        <th className="py-2.5 px-3.5 text-right w-36">Subtotal</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 print:divide-slate-200">
                       {selectedInvoice.items?.map((it, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50">
+                        <tr key={idx} className="hover:bg-slate-50 print:bg-white">
+                          <td className="py-3 px-3.5 text-center text-slate-400 font-mono text-[11px]">{idx + 1}</td>
                           <td className="py-3 px-3.5 font-medium text-slate-900">{it.description}</td>
-                          <td className="py-3 px-3.5 text-center text-slate-600 font-mono">{it.quantity}</td>
-                          <td className="py-3 px-3.5 text-right text-slate-600 font-mono">{formatIDR(it.unitPrice)}</td>
+                          <td className="py-3 px-3.5 text-center text-slate-700 font-mono">{it.quantity}</td>
+                          <td className="py-3 px-3.5 text-right text-slate-700 font-mono">{formatIDR(it.unitPrice)}</td>
                           <td className="py-3 px-3.5 text-right font-bold text-slate-900 font-mono">
                             {formatIDR((it.quantity || 1) * (it.unitPrice || 0))}
                           </td>
@@ -1811,60 +1880,86 @@ export default function Dashboard() {
 
                 {/* Total Calculations */}
                 <div className="flex justify-end">
-                  <div className="w-full sm:w-72 bg-white border border-slate-200 rounded-xl p-3.5 space-y-2 text-xs">
+                  <div className="w-full sm:w-72 bg-white border border-slate-200 rounded-xl p-4 space-y-2 text-xs print:border-slate-300">
                     <div className="flex justify-between text-slate-600">
                       <span>Subtotal:</span>
-                      <span className="font-mono">{formatIDR(selectedInvoice.totalAmount || 0)}</span>
+                      <span className="font-mono font-medium">{formatIDR(selectedInvoice.totalAmount || 0)}</span>
                     </div>
                     <div className="flex justify-between text-slate-600">
                       <span>PPN (11%):</span>
                       <span className="font-mono">Termasuk</span>
                     </div>
-                    <div className="pt-2 border-t border-slate-100 flex justify-between font-extrabold text-slate-900 text-sm">
+                    <div className="pt-2.5 border-t-2 border-slate-900 flex justify-between font-black text-slate-900 text-sm">
                       <span>Total Tagihan:</span>
-                      <span className="text-red-600 font-mono">{formatIDR(selectedInvoice.totalAmount || 0)}</span>
+                      <span className="text-red-600 font-mono text-base">{formatIDR(selectedInvoice.totalAmount || 0)}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Payment Instructions & QRIS Container */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1">
-                      <Building2 className="w-3.5 h-3.5 text-red-600" /> Instruksi Pembayaran Bank
-                    </span>
-                    <div className="space-y-1.5 text-xs text-slate-700">
-                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                        <div className="font-bold text-slate-900">Bank BCA</div>
-                        <div className="font-mono font-semibold text-red-600">8270192837</div>
-                        <div className="text-[10px] text-slate-400">a.n. PT Cendana Tech Solution</div>
+                <div className="pt-2 border-t border-slate-100 print:border-slate-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-1 gap-4">
+                    {/* Bank Transfer Information */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-2 print:border-slate-300">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                          <Building2 className="w-3.5 h-3.5 text-red-600" /> Instruksi Pembayaran Bank
+                        </span>
+                        <span className="text-[10px] text-slate-400 hidden print:inline">
+                          Sertakan No. Invoice pada berita transfer
+                        </span>
                       </div>
-                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
-                        <div className="font-bold text-slate-900">Bank Mandiri</div>
-                        <div className="font-mono font-semibold text-red-600">1370019283711</div>
-                        <div className="text-[10px] text-slate-400">a.n. PT Cendana Tech Solution</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-3 text-xs text-slate-700">
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 print:bg-white print:border-slate-200">
+                          <div className="font-bold text-slate-900">Bank BCA</div>
+                          <div className="font-mono font-bold text-red-600 text-sm">8270192837</div>
+                          <div className="text-[10px] text-slate-500">a.n. PT Cendana Tech Solution</div>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 print:bg-white print:border-slate-200">
+                          <div className="font-bold text-slate-900">Bank Mandiri</div>
+                          <div className="font-mono font-bold text-red-600 text-sm">1370019283711</div>
+                          <div className="text-[10px] text-slate-500">a.n. PT Cendana Tech Solution</div>
+                        </div>
                       </div>
+                    </div>
+
+                    {/* QRIS Container - STRICTLY EXCLUDED FROM PRINT via no-print and print:hidden */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col items-center justify-center text-center space-y-2 no-print print:hidden">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                        <QrCode className="w-3.5 h-3.5 text-red-600" /> Scan QRIS Transfer
+                      </span>
+                      <div className="w-24 h-24 bg-slate-900 text-white rounded-xl flex flex-col items-center justify-center p-2 font-mono text-[9px] font-bold border border-slate-800 shadow-inner">
+                        <QrCode className="w-12 h-12 text-white mb-1" />
+                        QRIS ACTIVE
+                      </div>
+                      <p className="text-[10px] text-slate-400">Scan via GoPay, OVO, Dana, BCA Mobile</p>
                     </div>
                   </div>
+                </div>
 
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col items-center justify-center text-center space-y-2">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1">
-                      <QrCode className="w-3.5 h-3.5 text-red-600" /> Scan QRIS Transfer
-                    </span>
-                    <div className="w-24 h-24 bg-slate-900 text-white rounded-xl flex flex-col items-center justify-center p-2 font-mono text-[9px] font-bold border border-slate-800 shadow-inner">
-                      <QrCode className="w-12 h-12 text-white mb-1" />
-                      QRIS ACTIVE
-                    </div>
-                    <p className="text-[10px] text-slate-400">Scan via GoPay, OVO, Dana, BCA Mobile</p>
+                {/* Print-only Legal / Authorized Signature Footer */}
+                <div className="hidden print:flex items-end justify-between pt-6 border-t border-slate-200 text-xs text-slate-500">
+                  <div className="max-w-md space-y-1">
+                    <p className="font-semibold text-slate-700">Catatan & Ketentuan Pembayaran:</p>
+                    <p className="text-[10px] text-slate-500 leading-normal">
+                      Faktur ini merupakan bukti tagihan yang sah dan diproses secara digital oleh sistem billing {activeWorkspace?.name || 'PT Cendana Tech Solution'}. Pembayaran dianggap sah setelah dana diterima di rekening resmi di atas.
+                    </p>
+                  </div>
+                  <div className="text-right space-y-1">
+                    <p className="text-[10px] text-slate-400">Diterbitkan Oleh,</p>
+                    <p className="font-bold text-slate-900 pt-7 border-b border-slate-300 min-w-[150px] text-center">
+                      {activeWorkspace?.name || 'PT Cendana Tech Solution'}
+                    </p>
+                    <p className="text-[9px] text-slate-400 text-center">Divisi Keuangan & Penagihan</p>
                   </div>
                 </div>
               </div>
 
               {/* Modal Bottom Action Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 no-print print:hidden">
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => window.print()}
+                    onClick={() => handlePrintInvoice(selectedInvoice)}
                     className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors shadow-2xs flex items-center gap-1.5"
                   >
                     <Printer className="w-3.5 h-3.5" /> Cetak / PDF
@@ -2039,7 +2134,7 @@ export default function Dashboard() {
                             ...newProject,
                             milestones: [
                               ...newProject.milestones,
-                              { title: 'Termin Baru', amount: 3000000, percentage: 20 },
+                              { title: 'Termin Baru', amount: 0, percentage: 0 },
                             ],
                           })
                         }

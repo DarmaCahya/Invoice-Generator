@@ -367,6 +367,7 @@ export class ProjectService {
     const createdInvoice = await InvoiceService.createInvoice({
       workspaceId: project.workspaceId,
       customerId: project.customerId,
+      projectId: project.id,
       invoiceNumber,
       dueDate,
       taxRate: 11,
@@ -374,6 +375,24 @@ export class ProjectService {
       notes: `Invoice diterbitkan otomatis dari Project ${project.name}. Terima kasih atas kerja sama Anda.`,
       items,
     });
+
+    if (sanitizedMsId && createdInvoice?.id) {
+      const cleanMsId = /^[a-zA-Z0-9_-]{1,64}$/.test(sanitizedMsId) ? sanitizedMsId : undefined;
+      const cleanInvId = /^[a-zA-Z0-9_-]{1,64}$/.test(createdInvoice.id) ? createdInvoice.id : undefined;
+      if (cleanMsId && cleanInvId) {
+        try {
+          await db.projectMilestone.update({
+            where: { id: cleanMsId },
+            data: {
+              status: 'billed',
+              invoiceId: cleanInvId,
+            },
+          });
+        } catch (err) {
+          console.warn('Could not update milestone in DB:', err);
+        }
+      }
+    }
 
     return createdInvoice;
   }

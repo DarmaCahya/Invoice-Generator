@@ -23,7 +23,7 @@ export default function DashboardHeader({
   userRole = "Company Owner",
 }: Props) {
   return (
-    <header className="sticky top-0 z-30 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center px-4 sm:px-6 justify-between gap-4 w-full shrink-0 shadow-2xs">
+    <header className="sticky top-0 z-30 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center px-4 sm:px-6 justify-between gap-4 w-full shrink-0 shadow-2xs no-print print:hidden">
       {/* Mobile Menu & Search */}
       <div className="flex items-center gap-3 flex-1 max-w-md">
         {/* Mobile menu button (<lg) */}

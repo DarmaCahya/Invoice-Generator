@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { AuthService } from '@/services/auth.service';
+import { WorkspaceService } from '@/services/workspace.service';
 
 export async function POST(
   req: Request,
@@ -8,13 +9,18 @@ export async function POST(
   try {
     const { id: workspaceId } = await params;
     const body = await req.json();
-    const { inviterId, email, roleId } = body;
+    let { inviterId, email, roleId } = body;
 
-    if (!inviterId || !email) {
+    if (!email) {
       return NextResponse.json(
-        { message: 'inviterId dan email wajib diisi.' },
+        { message: 'Email wajib diisi.' },
         { status: 400 }
       );
+    }
+
+    if (!inviterId) {
+      const ws = await WorkspaceService.getWorkspaceById(workspaceId);
+      inviterId = (ws as any)?.ownerId || 'admin-1';
     }
 
     const origin = req.headers.get('origin') || 'http://localhost:3000';

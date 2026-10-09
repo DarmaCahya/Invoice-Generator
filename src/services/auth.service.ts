@@ -30,15 +30,7 @@ export interface ActivateAccountDTO {
   name?: string;
 }
 
-const memoryUsersStore: any[] = [
-  {
-    id: 'user-default-1',
-    name: 'Owner Admin',
-    email: 'admin@cendanatech.com',
-    passwordHash: '$2b$10$jYkZHJ4fWP0xs7GP7pC/m.W8a0lyFtEJZ2hULcWXbYpMm9diRvOm2',
-    isActive: true,
-  },
-];
+const memoryUsersStore: any[] = [];
 
 const memoryInvitationsStore: any[] = [];
 

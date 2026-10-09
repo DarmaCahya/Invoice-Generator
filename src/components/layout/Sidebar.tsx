@@ -97,13 +97,13 @@ export default function Sidebar({
       {mobileOpen && (
         <div
           onClick={onCloseMobile}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 lg:hidden"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 lg:hidden no-print print:hidden"
         />
       )}
 
       {/* Sidebar Aside */}
       <aside
-        className={`fixed left-0 top-0 bottom-0 bg-white border-r border-slate-200/90 flex flex-col z-50 transition-all duration-300 ${
+        className={`fixed left-0 top-0 bottom-0 bg-white border-r border-slate-200/90 flex flex-col z-50 transition-all duration-300 no-print print:hidden ${
           isCollapsed ? "lg:w-16" : "lg:w-60"
         } ${
           mobileOpen ? "w-60 translate-x-0" : "w-60 -translate-x-full lg:translate-x-0"

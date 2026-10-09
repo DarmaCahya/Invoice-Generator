@@ -74,5 +74,29 @@ export class WorkspaceService {
       return newWs;
     }
   }
+
+  static async getWorkspaceById(id: string) {
+    if (!id || typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(id.trim())) {
+      return null;
+    }
+    const cleanId = id.trim();
+    try {
+      const workspace = await db.workspace.findUnique({
+        where: { id: cleanId },
+        include: {
+          companyProfile: true,
+          _count: {
+            select: { invoices: true, customers: true, members: true },
+          },
+        },
+      });
+
+      if (workspace) return workspace;
+      return memoryWorkspacesStore.find((w) => w.id === cleanId) || null;
+    } catch (err) {
+      console.warn('DB read error for workspace by id, using memory store fallback:', err);
+      return memoryWorkspacesStore.find((w) => w.id === cleanId) || null;
+    }
+  }
 }
 

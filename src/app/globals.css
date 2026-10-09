@@ -91,11 +91,73 @@
 }
 
 @media print {
-  body {
-    background: white !important;
-    color: black !important;
+  @page {
+    size: A4 portrait;
+    margin: 10mm 15mm 10mm 15mm;
   }
-  .no-print {
+
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Force hide all elements marked with no-print or print:hidden */
+  .no-print,
+  .no-print *,
+  .print\:hidden {
     display: none !important;
+  }
+
+  /* Reset modal positioning during print so it behaves like a normal document */
+  .modal-print-wrapper {
+    position: static !important;
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    z-index: auto !important;
+  }
+
+  .modal-print-card {
+    position: static !important;
+    transform: none !important;
+    opacity: 1 !important;
+    display: block !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  #printable-invoice-sheet {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }

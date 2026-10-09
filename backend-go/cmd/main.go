@@ -24,47 +24,6 @@ var store = &Storage{
 	invoices:  make(map[string]models.Invoice),
 }
 
-func initSeedData() {
-	c1 := models.Customer{
-		ID:        "cust-go-1",
-		Name:      "Budi Santoso (Go API)",
-		Email:     "budi@duluin.com",
-		Company:   "Duluin Digital",
-		Address:   "Jakarta, Indonesia",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	store.customers[c1.ID] = c1
-
-	dueDate := time.Now().AddDate(0, 0, 14)
-	inv1 := models.Invoice{
-		ID:            "inv-go-1001",
-		InvoiceNumber: "INV-GO-2026-001",
-		Status:        "PAID",
-		IssueDate:     time.Now(),
-		DueDate:       &dueDate,
-		TaxRate:       11.0,
-		Discount:      50.0,
-		TotalAmount:   1160.0,
-		Notes:         "Processed via Golang high-performance backend!",
-		CustomerID:    c1.ID,
-		Customer:      &c1,
-		Items: []models.InvoiceItem{
-			{
-				ID:          "item-1",
-				InvoiceID:   "inv-go-1001",
-				Description: "Golang Microservice Development",
-				Quantity:    1,
-				UnitPrice:   1100.0,
-				Amount:      1100.0,
-			},
-		},
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	store.invoices[inv1.ID] = inv1
-}
-
 func enableCORS(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
@@ -247,8 +206,6 @@ func handleInvoices(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	initSeedData()
-
 	http.HandleFunc("/api/v1/health", handleHealth)
 	http.HandleFunc("/api/v1/customers", handleCustomers)
 	http.HandleFunc("/api/v1/invoices", handleInvoices)
